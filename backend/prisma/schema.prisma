@@ -31,9 +31,9 @@ model Categoria {
 model Produto {
   id            String          @id @default(cuid())
   nome          String
-  codigoBarras  String?         @unique
   categoriaId   String
   categoria     Categoria       @relation(fields: [categoriaId], references: [id])
+  skus          ProdutoSku[]
   itensDespensa ItemDespensa[]
   itensCompra   ItemCompra[]
   precosHistorico PrecoHistorico[]
@@ -42,6 +42,27 @@ model Produto {
 
   @@unique([nome, categoriaId])
   @@map("produtos")
+}
+
+/// Embalagem/marca específica de um Produto genérico (ex: "Leite Elegê
+/// Semidesnatado 1L" para o genérico "Leite"). codigoBarras identifica a
+/// embalagem, não o genérico.
+model ProdutoSku {
+  id              String           @id @default(cuid())
+  produtoId       String
+  produto         Produto          @relation(fields: [produtoId], references: [id])
+  nome            String
+  marca           String?
+  codigoBarras    String?          @unique
+  itensDespensa   ItemDespensa[]
+  itensCompra     ItemCompra[]
+  precosHistorico PrecoHistorico[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([produtoId, nome])
+  @@index([produtoId])
+  @@map("produtos_sku")
 }
 
 model Supermercado {
@@ -58,15 +79,19 @@ model Supermercado {
   @@map("supermercados")
 }
 
-// RN-02.2: itens agrupados por categoria (via produto.categoria), ordenados por ordem de inserção (createdAt) dentro da categoria.
-// Regra 4.1: um mesmo Produto não pode ter dois ItemDespensa simultâneos (dedupe por produtoId).
+// RN-02.2: itens agrupados por categoria (via produto.categoria ou produtoSku.produto.categoria), ordenados por ordem de inserção (createdAt) dentro da categoria.
+// Regra 4.1: um mesmo Produto (ou um mesmo ProdutoSku) não pode ter dois ItemDespensa simultâneos (dedupe por produtoId/produtoSkuId).
+// Exatamente um entre produtoId/produtoSkuId deve estar preenchido — aplicado por CHECK constraint
+// escrito à mão na migration (itens_despensa_generico_xor_sku_check), Prisma não tem @@check.
 model ItemDespensa {
-  id         String   @id @default(cuid())
-  produtoId  String   @unique
-  produto    Produto  @relation(fields: [produtoId], references: [id])
-  quantidade Int      @default(1)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String      @id @default(cuid())
+  produtoId    String?     @unique
+  produto      Produto?    @relation(fields: [produtoId], references: [id])
+  produtoSkuId String?     @unique
+  produtoSku   ProdutoSku? @relation(fields: [produtoSkuId], references: [id])
+  quantidade   Int         @default(1)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@map("itens_despensa")
 }
@@ -91,12 +116,18 @@ model Compra {
 
 // RN-03.1: comprado só pode ser true quando precoUnitario não é nulo (validado na camada de aplicação).
 // origem é definida na criação e não muda durante a compra (regra 4.2).
+// produtoId sempre presente (genérico); produtoSkuId opcional (vínculo com SKU é opcional mesmo com item comprado).
+// Dedupe: substituído por dois índices únicos parciais escritos à mão na migration
+// (itens_compra_compra_sku_key / itens_compra_compra_produto_sem_sku_key) — duas SKUs
+// diferentes do mesmo genérico podem coexistir como linhas separadas na mesma Compra.
 model ItemCompra {
   id              String            @id @default(cuid())
   compraId        String
   compra          Compra            @relation(fields: [compraId], references: [id])
   produtoId       String
   produto         Produto           @relation(fields: [produtoId], references: [id])
+  produtoSkuId    String?
+  produtoSku      ProdutoSku?       @relation(fields: [produtoSkuId], references: [id])
   quantidade      Int               @default(1)
   precoUnitario   Decimal?          @db.Decimal(10, 2)
   comprado        Boolean           @default(false)
@@ -105,15 +136,18 @@ model ItemCompra {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  @@unique([compraId, produtoId])
   @@map("itens_compra")
 }
 
 // Base do módulo Analítico (seção 4.4): todo preço é Produto + Supermercado + Data, originado de uma Compra finalizada.
+// produtoId sempre presente (genérico, mantém analytics/agregação existentes inalterados);
+// produtoSkuId opcional, populado quando o ItemCompra de origem tinha um SKU vinculado.
 model PrecoHistorico {
   id             String       @id @default(cuid())
   produtoId      String
   produto        Produto      @relation(fields: [produtoId], references: [id])
+  produtoSkuId   String?
+  produtoSku     ProdutoSku?  @relation(fields: [produtoSkuId], references: [id])
   supermercadoId String
   supermercado   Supermercado @relation(fields: [supermercadoId], references: [id])
   compraId       String
@@ -125,5 +159,7 @@ model PrecoHistorico {
   @@index([produtoId])
   @@index([supermercadoId])
   @@index([produtoId, supermercadoId])
+  @@index([produtoSkuId])
+  @@index([produtoSkuId, supermercadoId])
   @@map("precos_historico")
 }

@@ -87,3 +87,80 @@ test.describe.serial("Despensa", () => {
     await request.delete(`/despensa/${item.id}`);
   });
 });
+
+test.describe("Despensa — genérico vs SKU", () => {
+  test("adicionar por nome com tipo=SKU cria o genérico e o SKU, agrupado pela categoria do genérico", async ({
+    request,
+  }) => {
+    const nomeGenerico = nomeUnico("Leite");
+    const nomeSku = `${nomeGenerico} Elegê Semidesnatado`;
+
+    const res = await request.post("/despensa", {
+      data: { nome: nomeSku, tipo: "SKU", produtoGenericoNome: nomeGenerico, marca: "Elegê" },
+    });
+    expect(res.status()).toBe(201);
+    const item = await res.json();
+    expect(item.produto).toBeNull();
+    expect(item.produtoSku.nome).toBe(nomeSku);
+    expect(item.produtoSku.produto.nome).toBe(nomeGenerico);
+
+    const despensa = await request.get("/despensa");
+    const grupoOutros = (await despensa.json()).find(
+      (g: { categoria: { nome: string } }) => g.categoria.nome === "Outros",
+    );
+    expect(grupoOutros.itens.map((i: { id: string }) => i.id)).toContain(item.id);
+
+    await request.delete(`/despensa/${item.id}`);
+  });
+
+  test("Regra 4.1 no nível SKU: adicionar o mesmo SKU duas vezes soma quantidade", async ({ request }) => {
+    const nomeGenerico = nomeUnico("Iogurte");
+    const nomeSku = `${nomeGenerico} Danone Natural`;
+
+    const primeira = await request.post("/despensa", {
+      data: { nome: nomeSku, tipo: "SKU", produtoGenericoNome: nomeGenerico, quantidade: 2 },
+    });
+    const item = await primeira.json();
+
+    const segunda = await request.post("/despensa", {
+      data: { produtoSkuId: item.produtoSkuId, quantidade: 3 },
+    });
+    expect(segunda.status()).toBe(201);
+    const itemSomado = await segunda.json();
+    expect(itemSomado.id).toBe(item.id);
+    expect(itemSomado.quantidade).toBe(5);
+
+    await request.delete(`/despensa/${item.id}`);
+  });
+
+  test("item genérico e item SKU do mesmo genérico ficam em linhas distintas", async ({ request }) => {
+    const nomeGenerico = nomeUnico("Queijo");
+    const nomeSku = `${nomeGenerico} Polenghi Mussarela`;
+
+    const generico = await request.post("/despensa", { data: { nome: nomeGenerico } });
+    expect(generico.status()).toBe(201);
+    const itemGenerico = await generico.json();
+
+    const sku = await request.post("/despensa", {
+      data: { nome: nomeSku, tipo: "SKU", produtoGenericoNome: nomeGenerico },
+    });
+    expect(sku.status()).toBe(201);
+    const itemSku = await sku.json();
+
+    expect(itemSku.id).not.toBe(itemGenerico.id);
+    expect(itemSku.produtoSku.produtoId).toBe(itemGenerico.produtoId);
+
+    await request.delete(`/despensa/${itemGenerico.id}`);
+    await request.delete(`/despensa/${itemSku.id}`);
+  });
+
+  test("400 ao informar produtoId e produtoSkuId juntos, ou nenhum dos dois", async ({ request }) => {
+    const ambosPreenchidos = await request.post("/despensa", {
+      data: { produtoId: "id-qualquer", produtoSkuId: "outro-id-qualquer" },
+    });
+    expect(ambosPreenchidos.status()).toBe(400);
+
+    const nenhumPreenchido = await request.post("/despensa", { data: { quantidade: 1 } });
+    expect(nenhumPreenchido.status()).toBe(400);
+  });
+});

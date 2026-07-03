@@ -2,11 +2,16 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { OrigemItemCompra, Prisma, StatusCompra } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { encontrarOuCriarProduto } from "../lib/produtos.js";
-import { badRequest, conflict, notFound } from "../lib/http-error.js";
+import {
+  buscarProdutoSkuOuFalhar,
+  encontrarOuCriarProdutoSku,
+  resolverReferenciaProdutoOuSku,
+} from "../lib/produtos.js";
+import { badRequest, conflict, HttpError, notFound } from "../lib/http-error.js";
 
 const itemCompraInclude = {
   produto: { include: { categoria: true } },
+  produtoSku: true,
 } as const;
 
 const criarCompraSchema = z.object({
@@ -21,11 +26,17 @@ const atualizarCompraSchema = z.object({
   longitude: z.number().optional(),
 });
 
+// Item extra: mesmo either-or genérico/SKU da Despensa (ver lib/produtos.ts#resolverReferenciaProdutoOuSku).
 const adicionarItemExtraSchema = z.object({
-  nome: z.string().trim().min(1),
+  produtoId: z.string().optional(),
+  produtoSkuId: z.string().optional(),
+  nome: z.string().trim().min(1).optional(),
+  tipo: z.enum(["GENERICO", "SKU"]).default("GENERICO"),
+  produtoGenericoNome: z.string().trim().min(1).optional(),
+  marca: z.string().trim().min(1).optional(),
+  codigoBarras: z.string().trim().min(1).optional(),
   quantidade: z.number().int().min(1).default(1),
   categoriaId: z.string().optional(),
-  codigoBarras: z.string().trim().min(1).optional(),
 });
 
 const atualizarItemSchema = z
@@ -40,6 +51,21 @@ const atualizarItemSchema = z
 const ajustarQuantidadeSchema = z.object({
   delta: z.number().int().refine((v) => v !== 0, "delta não pode ser zero"),
 });
+
+// Vínculo de SKU a um item do Carrinho (opcional — RN-03.1 continua exigindo só preço para
+// marcar comprado). Aceita SKU já conhecido por id, por código de barras (fluxo de scan,
+// criando um SKU novo se vier "nome" e o código for desconhecido), ou por nome manual.
+const vincularSkuSchema = z
+  .object({
+    produtoSkuId: z.string().optional(),
+    codigoBarras: z.string().trim().min(1).optional(),
+    nome: z.string().trim().min(1).optional(),
+    marca: z.string().trim().min(1).optional(),
+  })
+  .refine(
+    (data) => !!data.produtoSkuId || !!data.codigoBarras || !!data.nome,
+    "Informe produtoSkuId, codigoBarras ou nome",
+  );
 
 async function buscarCompraOuFalhar(id: string) {
   const compra = await prisma.compra.findUnique({
@@ -58,6 +84,51 @@ function garantirEmAndamento(compra: { status: StatusCompra }) {
   if (compra.status === StatusCompra.FINALIZADA) {
     throw conflict("Compra já finalizada é somente leitura");
   }
+}
+
+async function buscarItemOuFalhar(compraId: string, itemId: string) {
+  const item = await prisma.itemCompra.findUnique({
+    where: { id: itemId },
+    include: { produto: true },
+  });
+  if (!item || item.compraId !== compraId) throw notFound("Item da compra");
+  return item;
+}
+
+/**
+ * RN-03.7 estendida: preço sugerido prioriza o histórico do SKU (mesmo supermercado, depois
+ * qualquer supermercado) e cai para o histórico do genérico na mesma cascata; sem nenhum
+ * registro, retorna null (campo em branco).
+ */
+async function sugerirPreco(
+  tx: Prisma.TransactionClient | typeof prisma,
+  input: { produtoId: string; produtoSkuId?: string | null; supermercadoId?: string | null },
+): Promise<number | null> {
+  const buscarUltimo = async (where: Prisma.PrecoHistoricoWhereInput) => {
+    const registro = await tx.precoHistorico.findFirst({ where, orderBy: { data: "desc" } });
+    return registro ? Number(registro.preco) : null;
+  };
+
+  if (input.produtoSkuId) {
+    if (input.supermercadoId) {
+      const porSkuEMercado = await buscarUltimo({
+        produtoSkuId: input.produtoSkuId,
+        supermercadoId: input.supermercadoId,
+      });
+      if (porSkuEMercado !== null) return porSkuEMercado;
+    }
+    const porSku = await buscarUltimo({ produtoSkuId: input.produtoSkuId });
+    if (porSku !== null) return porSku;
+  }
+
+  if (input.supermercadoId) {
+    const porGenericoEMercado = await buscarUltimo({
+      produtoId: input.produtoId,
+      supermercadoId: input.supermercadoId,
+    });
+    if (porGenericoEMercado !== null) return porGenericoEMercado;
+  }
+  return buscarUltimo({ produtoId: input.produtoId });
 }
 
 export async function comprasRoutes(app: FastifyInstance) {
@@ -96,7 +167,7 @@ export async function comprasRoutes(app: FastifyInstance) {
     }
 
     const compra = await prisma.$transaction(async (tx) => {
-      const itensDespensa = await tx.itemDespensa.findMany();
+      const itensDespensa = await tx.itemDespensa.findMany({ include: { produtoSku: true } });
 
       const novaCompra = await tx.compra.create({
         data: {
@@ -107,11 +178,13 @@ export async function comprasRoutes(app: FastifyInstance) {
       });
 
       // RN-02.3: copia da Despensa para a Compra como planejado/não comprado, sem remover da Despensa.
+      // Item de despensa SKU'd entra no carrinho já vinculado ao mesmo SKU; genérico entra só com o genérico.
       if (itensDespensa.length > 0) {
         await tx.itemCompra.createMany({
           data: itensDespensa.map((item) => ({
             compraId: novaCompra.id,
-            produtoId: item.produtoId,
+            produtoId: item.produtoId ?? item.produtoSku!.produtoId,
+            produtoSkuId: item.produtoSkuId,
             quantidade: item.quantidade,
             origem: OrigemItemCompra.PLANEJADO,
             comprado: false,
@@ -156,17 +229,20 @@ export async function comprasRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const parsed = adicionarItemExtraSchema.safeParse(request.body);
     if (!parsed.success) throw badRequest("Dados inválidos", parsed.error.issues);
-    const { nome, quantidade, categoriaId, codigoBarras } = parsed.data;
+    const { quantidade, ...referencia } = parsed.data;
 
     const compra = await buscarCompraOuFalhar(id);
     garantirEmAndamento(compra);
 
     const item = await prisma.$transaction(async (tx) => {
-      const { produto } = await encontrarOuCriarProduto(tx, { nome, categoriaId, codigoBarras });
+      const { produtoId, produtoSkuId } = await resolverReferenciaProdutoOuSku(tx, referencia);
 
-      const existente = await tx.itemCompra.findUnique({
-        where: { compraId_produtoId: { compraId: id, produtoId: produto.id } },
-      });
+      // Dedupe: por produtoSkuId quando o item tem SKU, senão por produtoId entre os itens sem SKU
+      // (espelha os dois índices únicos parciais da migration — ver schema.prisma#ItemCompra).
+      const existente = produtoSkuId
+        ? await tx.itemCompra.findFirst({ where: { compraId: id, produtoSkuId } })
+        : await tx.itemCompra.findFirst({ where: { compraId: id, produtoId: produtoId!, produtoSkuId: null } });
+
       if (existente) {
         return tx.itemCompra.update({
           where: { id: existente.id },
@@ -178,7 +254,8 @@ export async function comprasRoutes(app: FastifyInstance) {
       return tx.itemCompra.create({
         data: {
           compraId: id,
-          produtoId: produto.id,
+          produtoId: produtoId ?? (await buscarProdutoSkuOuFalhar(tx, produtoSkuId!)).produtoId,
+          produtoSkuId,
           quantidade,
           origem: OrigemItemCompra.EXTRA,
           comprado: false,
@@ -200,8 +277,7 @@ export async function comprasRoutes(app: FastifyInstance) {
     const compra = await buscarCompraOuFalhar(id);
     garantirEmAndamento(compra);
 
-    const item = await prisma.itemCompra.findUnique({ where: { id: itemId } });
-    if (!item || item.compraId !== id) throw notFound("Item da compra");
+    const item = await buscarItemOuFalhar(id, itemId);
 
     const { comprado, precoUnitario, codigoBarrasLido, quantidade } = parsed.data;
 
@@ -222,6 +298,85 @@ export async function comprasRoutes(app: FastifyInstance) {
     });
   });
 
+  // Vincula (ou cria) um ProdutoSku a um item do Carrinho — opcional, usado pelo fluxo de scan/seleção
+  // manual de marca (Fase 4). Retorna o item atualizado + preço sugerido (RN-03.7) para a mesma requisição.
+  app.post("/compras/:id/itens/:itemId/sku", async (request) => {
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    const parsed = vincularSkuSchema.safeParse(request.body);
+    if (!parsed.success) throw badRequest("Dados inválidos", parsed.error.issues);
+
+    const compra = await buscarCompraOuFalhar(id);
+    garantirEmAndamento(compra);
+    const item = await buscarItemOuFalhar(id, itemId);
+
+    const { produtoSkuId, codigoBarras, nome, marca } = parsed.data;
+
+    return prisma.$transaction(async (tx) => {
+      let sku;
+      if (produtoSkuId) {
+        sku = await buscarProdutoSkuOuFalhar(tx, produtoSkuId);
+      } else if (codigoBarras) {
+        const porCodigo = await tx.produtoSku.findUnique({
+          where: { codigoBarras },
+          include: { produto: { include: { categoria: true } } },
+        });
+        if (porCodigo) {
+          sku = porCodigo;
+        } else if (nome) {
+          const { produtoSku } = await encontrarOuCriarProdutoSku(tx, {
+            nome,
+            marca,
+            codigoBarras,
+            produtoId: item.produtoId,
+          });
+          sku = produtoSku;
+        } else {
+          throw new HttpError(404, "Código de barras desconhecido", { codigoBarrasDesconhecido: true });
+        }
+      } else {
+        const { produtoSku } = await encontrarOuCriarProdutoSku(tx, {
+          nome: nome!,
+          marca,
+          produtoId: item.produtoId,
+        });
+        sku = produtoSku;
+      }
+
+      if (sku.produtoId !== item.produtoId) {
+        throw badRequest(
+          `Este SKU pertence a "${sku.produto.nome}", não a "${item.produto.nome}"`,
+        );
+      }
+
+      const atualizado = await tx.itemCompra.update({
+        where: { id: itemId },
+        data: {
+          produtoSkuId: sku.id,
+          codigoBarrasLido: codigoBarras ?? undefined,
+        },
+        include: itemCompraInclude,
+      });
+
+      const precoSugerido = await sugerirPreco(tx, {
+        produtoId: item.produtoId,
+        produtoSkuId: sku.id,
+        supermercadoId: compra.supermercadoId,
+      });
+
+      return { item: atualizado, precoSugerido };
+    });
+  });
+
+  app.delete("/compras/:id/itens/:itemId/sku", async (request, reply) => {
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    const compra = await buscarCompraOuFalhar(id);
+    garantirEmAndamento(compra);
+    await buscarItemOuFalhar(id, itemId);
+
+    await prisma.itemCompra.update({ where: { id: itemId }, data: { produtoSkuId: null } });
+    reply.status(204);
+  });
+
   app.patch("/compras/:id/itens/:itemId/quantidade", async (request) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const parsed = ajustarQuantidadeSchema.safeParse(request.body);
@@ -230,8 +385,7 @@ export async function comprasRoutes(app: FastifyInstance) {
     const compra = await buscarCompraOuFalhar(id);
     garantirEmAndamento(compra);
 
-    const item = await prisma.itemCompra.findUnique({ where: { id: itemId } });
-    if (!item || item.compraId !== id) throw notFound("Item da compra");
+    const item = await buscarItemOuFalhar(id, itemId);
 
     const novaQuantidade = item.quantidade + parsed.data.delta;
     if (novaQuantidade < 1) {
@@ -250,9 +404,7 @@ export async function comprasRoutes(app: FastifyInstance) {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const compra = await buscarCompraOuFalhar(id);
     garantirEmAndamento(compra);
-
-    const item = await prisma.itemCompra.findUnique({ where: { id: itemId } });
-    if (!item || item.compraId !== id) throw notFound("Item da compra");
+    await buscarItemOuFalhar(id, itemId);
 
     await prisma.itemCompra.delete({ where: { id: itemId } });
     reply.status(204);
@@ -275,6 +427,7 @@ export async function comprasRoutes(app: FastifyInstance) {
           await tx.precoHistorico.create({
             data: {
               produtoId: item.produtoId,
+              produtoSkuId: item.produtoSkuId,
               supermercadoId: compra.supermercadoId ?? (await garantirSupermercadoGenerico(tx)),
               compraId: id,
               preco: item.precoUnitario!,
@@ -282,15 +435,39 @@ export async function comprasRoutes(app: FastifyInstance) {
           });
 
           if (item.origem === OrigemItemCompra.PLANEJADO) {
-            await tx.itemDespensa.deleteMany({ where: { produtoId: item.produtoId } });
+            // Remove o ItemDespensa de origem. O item pode ter sido vinculado a um SKU já no
+            // Carrinho (scan), depois de copiado da Despensa como genérico — nesse caso a linha
+            // de origem ainda está chaveada por produtoId, não por produtoSkuId, então tenta pelo
+            // SKU primeiro e cai para o genérico se nada for removido.
+            if (item.produtoSkuId) {
+              const { count } = await tx.itemDespensa.deleteMany({ where: { produtoSkuId: item.produtoSkuId } });
+              if (count === 0) {
+                await tx.itemDespensa.deleteMany({ where: { produtoId: item.produtoId } });
+              }
+            } else {
+              await tx.itemDespensa.deleteMany({ where: { produtoId: item.produtoId } });
+            }
           }
         } else if (item.origem === OrigemItemCompra.PLANEJADO) {
-          // Mantém/recria o ItemDespensa para itens planejados não comprados.
-          await tx.itemDespensa.upsert({
-            where: { produtoId: item.produtoId },
-            update: {},
-            create: { produtoId: item.produtoId, quantidade: item.quantidade },
-          });
+          // Mantém/recria o ItemDespensa para itens planejados não comprados. Mesma ressalva do
+          // bloco acima: um item SKU'd no Carrinho pode ter uma linha de origem ainda genérica
+          // (ou vice-versa) — checa as duas chaves antes de decidir criar, para não duplicar.
+          if (item.produtoSkuId) {
+            const existente =
+              (await tx.itemDespensa.findUnique({ where: { produtoSkuId: item.produtoSkuId } })) ??
+              (await tx.itemDespensa.findUnique({ where: { produtoId: item.produtoId } }));
+            if (!existente) {
+              await tx.itemDespensa.create({
+                data: { produtoSkuId: item.produtoSkuId, quantidade: item.quantidade },
+              });
+            }
+          } else {
+            await tx.itemDespensa.upsert({
+              where: { produtoId: item.produtoId },
+              update: {},
+              create: { produtoId: item.produtoId, quantidade: item.quantidade },
+            });
+          }
         }
         // RN-05.1: item extra não comprado é descartado silenciosamente (nenhuma ação).
       }

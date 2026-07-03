@@ -23,6 +23,8 @@ const grupos = ref<GrupoDespensa[]>([]);
 const carregando = ref(true);
 const erro = ref<string | null>(null);
 const nomeNovoItem = ref("");
+const marcaNovoItem = ref("");
+const mostrarCampoMarca = ref(false);
 const adicionando = ref(false);
 const indoParaCarrinho = ref(false);
 
@@ -42,17 +44,31 @@ async function carregar() {
   }
 }
 
-// Regra 4.1: nome já existente soma quantidade em vez de duplicar (decidido no backend).
-// Produto novo sem categoria conhecida cai em "Outros" (idem).
+// Regra 4.1: mesma referência (genérico ou SKU) já existente soma quantidade em vez de duplicar
+// (decidido no backend). Produto/SKU novo sem categoria conhecida cai em "Outros" (idem).
+// Com o campo "+ marca" preenchido, o item vira um SKU específico do genérico digitado;
+// sem marca, o comportamento é idêntico ao de sempre (item genérico).
 async function adicionarItem() {
   const nome = nomeNovoItem.value.trim();
   if (!nome) return;
+  const marca = marcaNovoItem.value.trim();
 
   adicionando.value = true;
   erro.value = null;
   try {
-    await adicionarItemDespensa(nome);
+    if (marca) {
+      await adicionarItemDespensa({
+        nome: `${nome} ${marca}`,
+        tipo: "SKU",
+        produtoGenericoNome: nome,
+        marca,
+      });
+    } else {
+      await adicionarItemDespensa({ nome });
+    }
     nomeNovoItem.value = "";
+    marcaNovoItem.value = "";
+    mostrarCampoMarca.value = false;
     await carregar();
   } catch (e) {
     erro.value = e instanceof Error ? e.message : "Não foi possível adicionar o item";
@@ -120,22 +136,40 @@ onMounted(carregar);
       <RouterLink to="/" class="text-sm text-muted underline">← Home</RouterLink>
     </header>
 
-    <form class="mb-4 flex gap-2" @submit.prevent="adicionarItem">
-      <input
-        v-model="nomeNovoItem"
-        type="text"
-        placeholder="O que está faltando?"
-        data-testid="despensa-input"
-        class="flex-1 rounded-sketchy border-2 border-ink bg-surface px-3 py-2 font-mono text-sm outline-none"
-      />
-      <Button
-        type="submit"
-        variant="secondary"
-        data-testid="despensa-add"
-        :disabled="adicionando || !nomeNovoItem.trim()"
+    <form class="mb-4" @submit.prevent="adicionarItem">
+      <div class="flex gap-2">
+        <input
+          v-model="nomeNovoItem"
+          type="text"
+          placeholder="O que está faltando?"
+          data-testid="despensa-input"
+          class="flex-1 rounded-sketchy border-2 border-ink bg-surface px-3 py-2 font-mono text-sm outline-none"
+        />
+        <Button
+          type="submit"
+          variant="secondary"
+          data-testid="despensa-add"
+          :disabled="adicionando || !nomeNovoItem.trim()"
+        >
+          {{ adicionando ? "…" : "Add" }}
+        </Button>
+      </div>
+      <button
+        type="button"
+        data-testid="despensa-toggle-marca"
+        class="mt-1 text-xs text-muted underline"
+        @click="mostrarCampoMarca = !mostrarCampoMarca"
       >
-        {{ adicionando ? "…" : "Add" }}
-      </Button>
+        {{ mostrarCampoMarca ? "− marca" : "+ marca" }}
+      </button>
+      <input
+        v-if="mostrarCampoMarca"
+        v-model="marcaNovoItem"
+        type="text"
+        placeholder="Marca (opcional, ex: Elegê)"
+        data-testid="despensa-input-marca"
+        class="mt-2 w-full rounded-sketchy border-2 border-ink bg-surface px-3 py-2 font-mono text-sm outline-none"
+      />
     </form>
 
     <p v-if="erro" class="mb-4 rounded-sketchy border-2 border-ink bg-danger/10 p-3 text-sm text-danger">
@@ -158,7 +192,10 @@ onMounted(carregar);
           class="mb-3 flex items-center gap-3"
           data-testid="despensa-item"
         >
-          <span class="flex-1">{{ item.produto.nome }}</span>
+          <span class="flex-1">
+            {{ item.produto?.nome ?? item.produtoSku?.nome }}
+            <span v-if="item.produtoSku?.marca" class="text-xs text-muted">({{ item.produtoSku.marca }})</span>
+          </span>
           <QtyStepper
             :model-value="item.quantidade"
             @update:model-value="(novaQtd) => ajustarQuantidade(item.id, novaQtd - item.quantidade)"

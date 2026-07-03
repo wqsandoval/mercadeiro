@@ -36,7 +36,7 @@ export default async function globalSetup(): Promise<void> {
     }
 
     await client.query(
-      "TRUNCATE TABLE precos_historico, itens_compra, compras, itens_despensa, produtos, supermercados RESTART IDENTITY CASCADE",
+      "TRUNCATE TABLE precos_historico, itens_compra, compras, itens_despensa, produtos_sku, produtos, supermercados RESTART IDENTITY CASCADE",
     );
   } finally {
     await client.end();

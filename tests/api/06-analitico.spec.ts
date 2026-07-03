@@ -78,4 +78,37 @@ test.describe.serial("Analítico", () => {
     const analitico = await (await request.get("/analitico?periodo=mes")).json();
     expect(analitico.totalGasto).toBeCloseTo(baselineTotal, 2);
   });
+
+  test("regressão: compra com item vinculado a um SKU ainda agrega corretamente por categoria", async ({
+    request,
+  }) => {
+    const nomeGenerico = nomeUnico("Analitico SKU");
+    const criarSku = await request.post("/produtos-sku", {
+      data: { nome: `${nomeGenerico} Marca X`, produtoGenericoNome: nomeGenerico },
+    });
+    const sku = await criarSku.json();
+
+    // RN-02.4: já existe a Compra "em andamento" deixada pelo teste anterior (de propósito, para
+    // testar RN-06.5) — POST /compras a retoma em vez de criar outra, então o item comprado
+    // daquele teste (PRECO_EM_ANDAMENTO) também entra no total ao finalizar aqui.
+    const criarCompra = await request.post("/compras", { data: {} });
+    const compra = await criarCompra.json();
+    expect(compra.id).toBe(compraEmAndamentoId);
+
+    const itemExtra = await request.post(`/compras/${compra.id}/itens`, {
+      data: { produtoSkuId: sku.id },
+    });
+    const item = await itemExtra.json();
+
+    await request.patch(`/compras/${compra.id}/itens/${item.id}`, {
+      data: { comprado: true, precoUnitario: PRECO_FINALIZADO },
+    });
+    const finalizar = await request.post(`/compras/${compra.id}/finalizar`);
+    expect(finalizar.status()).toBe(200);
+    compraEmAndamentoId = undefined;
+
+    const analitico = await (await request.get("/analitico?periodo=mes")).json();
+    expect(analitico.totalGasto).toBeCloseTo(baselineTotal + PRECO_EM_ANDAMENTO + PRECO_FINALIZADO, 2);
+    baselineTotal = analitico.totalGasto;
+  });
 });

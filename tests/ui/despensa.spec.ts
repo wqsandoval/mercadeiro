@@ -108,6 +108,20 @@ test.describe("Despensa", () => {
     await expect(linha).toHaveCount(0);
   });
 
+  test("toggle '+ marca' adiciona o item como SKU específico, exibindo a marca no card", async ({ page }) => {
+    const nomeGenerico = nomeUnico("UI Despensa Leite");
+    await page.goto("/despensa");
+
+    await page.getByTestId("despensa-input").fill(nomeGenerico);
+    await page.getByTestId("despensa-toggle-marca").click();
+    await page.getByTestId("despensa-input-marca").fill("Elegê");
+    await page.getByTestId("despensa-add").click();
+
+    const linha = page.getByTestId("despensa-item").filter({ hasText: nomeGenerico });
+    await expect(linha).toBeVisible();
+    await expect(linha).toContainText("Elegê");
+  });
+
   test("CTA Ir para o Carrinho navega sem remover itens da Despensa (RN-02.3)", async ({ page }) => {
     const nome = nomeUnico("UI Despensa Vai Pro Carrinho");
     await page.goto("/despensa");

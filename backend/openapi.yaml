@@ -28,6 +28,11 @@ tags:
     description: Agrupadores de produtos, pré-seedados no banco (Frutas, Laticínios, ... "Outros" como fallback).
   - name: Produtos
     description: Itens genéricos e reutilizáveis, reaproveitados por nome (Regra 4.1) entre Despensa e Compras.
+  - name: ProdutosSku
+    description: >
+      Embalagem/marca específica de um Produto genérico (ex: "Leite Elegê
+      Semidesnatado 1L" para o genérico "Leite"). Código de barras e histórico
+      de preço vivem neste nível, não no genérico.
   - name: Despensa
     description: UC-02 — o que a família precisa comprar (lista viva, sem data).
   - name: Compras
@@ -186,10 +191,6 @@ paths:
           description: Busca por substring no nome (case-insensitive)
           schema:
             type: string
-        - name: codigoBarras
-          in: query
-          schema:
-            type: string
       responses:
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -223,8 +224,6 @@ paths:
                 categoriaId:
                   type: string
                   description: Se omitido ou inválido, cai no fallback "Outros"
-                codigoBarras:
-                  type: string
       responses:
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -263,7 +262,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       tags: [Produtos]
-      summary: Atualiza nome, categoria e/ou código de barras de um produto
+      summary: Atualiza nome e/ou categoria de um produto
       operationId: atualizarProduto
       requestBody:
         required: true
@@ -278,9 +277,6 @@ paths:
                 categoriaId:
                   type: string
                   description: Se inválido, cai no fallback "Outros"
-                codigoBarras:
-                  type: string
-                  nullable: true
       responses:
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -296,7 +292,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       tags: [Produtos]
-      summary: Remove um produto sem uso na Despensa ou em Compras
+      summary: Remove um produto sem uso na Despensa, em Compras, ou com SKUs cadastrados
       operationId: removerProduto
       responses:
         "401":
@@ -306,7 +302,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: Produto está em uso na Despensa ou em uma Compra
+          description: Produto está em uso na Despensa, em uma Compra, ou possui ProdutoSku cadastrado
           content:
             application/json:
               schema:
@@ -335,6 +331,199 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /produtos/{id}/skus:
+    parameters:
+      - $ref: "#/components/parameters/ProdutoId"
+    get:
+      tags: [ProdutosSku]
+      summary: Lista os SKUs (marcas/embalagens) cadastrados para um Produto genérico
+      operationId: listarSkusDoProduto
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Lista de SKUs do produto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProdutoSkuComProduto"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /produtos-sku:
+    get:
+      tags: [ProdutosSku]
+      summary: Lista SKUs, com filtros opcionais
+      description: Lookup principal do fluxo de scan (RN-03.7) — busca por código de barras exato.
+      operationId: listarProdutosSku
+      parameters:
+        - name: produtoId
+          in: query
+          schema:
+            type: string
+        - name: codigoBarras
+          in: query
+          schema:
+            type: string
+        - name: busca
+          in: query
+          description: Busca por substring no nome (case-insensitive)
+          schema:
+            type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Lista de SKUs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProdutoSkuComProduto"
+    post:
+      tags: [ProdutosSku]
+      summary: Cria um SKU ou reaproveita um existente (por código de barras ou nome)
+      description: >
+        Dedupe prioriza `codigoBarras` (sinal mais forte); sem código, cai para
+        nome dentro do mesmo Produto genérico (case-insensitive), com backfill
+        de código de barras em SKU existente que ainda não tinha um. Requer
+        `produtoId` (genérico já existente) ou `produtoGenericoNome` (cria/reaproveita
+        o genérico correspondente, caindo em "Outros" se `categoriaId` omitido/inválido).
+      operationId: criarProdutoSku
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                marca:
+                  type: string
+                codigoBarras:
+                  type: string
+                produtoId:
+                  type: string
+                produtoGenericoNome:
+                  type: string
+                categoriaId:
+                  type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: SKU já existente reaproveitado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoSkuComProduto"
+        "201":
+          description: SKU criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoSkuComProduto"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /produtos-sku/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProdutoSkuId"
+    get:
+      tags: [ProdutosSku]
+      summary: Busca um SKU por id
+      operationId: buscarProdutoSku
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: SKU encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoSkuComProduto"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [ProdutosSku]
+      summary: Atualiza nome, marca e/ou código de barras de um SKU
+      operationId: atualizarProdutoSku
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Ao menos um campo deve ser informado
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                marca:
+                  type: string
+                  nullable: true
+                codigoBarras:
+                  type: string
+                  nullable: true
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: SKU atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoSkuComProduto"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [ProdutosSku]
+      summary: Remove um SKU sem uso na Despensa ou em Compras
+      operationId: removerProdutoSku
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: SKU removido
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: ProdutoSku está em uso na Despensa ou em uma Compra
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /produtos-sku/{id}/precos:
+    parameters:
+      - $ref: "#/components/parameters/ProdutoSkuId"
+    get:
+      tags: [ProdutosSku]
+      summary: Histórico de preço do SKU, agrupado por supermercado
+      description: >
+        Equivalente a GET /produtos/{id}/precos, mas no nível de marca/embalagem
+        específica (decisão: preço vive no SKU). Mesmo formato de resposta.
+      operationId: buscarPrecosDoProdutoSku
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Agregados de preço do SKU
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrecosProduto"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /despensa:
     get:
       tags: [Despensa]
@@ -356,30 +545,23 @@ paths:
                   $ref: "#/components/schemas/GrupoDespensa"
     post:
       tags: [Despensa]
-      summary: Adiciona um item à Despensa (cria produto se necessário)
+      summary: Adiciona um item à Despensa — genérico ou SKU específico (cria produto/SKU se necessário)
       description: >
-        Regra 4.1: se já existir um ItemDespensa para o produto (mesmo nome,
-        case-insensitive), soma a quantidade em vez de duplicar a linha.
+        Um item da Despensa referencia OU um Produto genérico OU um ProdutoSku
+        específico, nunca os dois. Informe exatamente um entre `produtoId`
+        (reaproveita um genérico existente), `produtoSkuId` (reaproveita um SKU
+        existente) ou `nome` (cria/reaproveita por nome — genérico por padrão,
+        ou SKU se `tipo: SKU`, exigindo `produtoGenericoNome` nesse caso).
+        Regra 4.1: se já existir um ItemDespensa para a mesma referência
+        (mesmo Produto genérico OU mesmo ProdutoSku), soma a quantidade em vez
+        de duplicar a linha.
       operationId: adicionarItemDespensa
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [nome]
-              properties:
-                nome:
-                  type: string
-                  minLength: 1
-                quantidade:
-                  type: integer
-                  minimum: 1
-                  default: 1
-                categoriaId:
-                  type: string
-                codigoBarras:
-                  type: string
+              $ref: "#/components/schemas/AdicionarItemDespensaOuCompra"
       responses:
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -568,32 +750,21 @@ paths:
       - $ref: "#/components/parameters/CompraId"
     post:
       tags: [Compras]
-      summary: Adiciona um item extra (não planejado) à Compra
+      summary: Adiciona um item extra (não planejado) à Compra — genérico ou SKU específico
       description: >
         UC-03: cria um ItemCompra com `origem: EXTRA`, `comprado: false` e sem
-        preço. Se o produto já tiver um item extra nesta Compra, soma a
-        quantidade em vez de duplicar. Rejeitado se a Compra já estiver
-        finalizada (RN-05.4).
+        preço. Mesmo contrato either-or genérico/SKU do POST /despensa (ver ali
+        para detalhes). Se a mesma referência já tiver um item extra nesta
+        Compra, soma a quantidade em vez de duplicar — duas SKUs diferentes do
+        mesmo genérico podem coexistir como linhas separadas. Rejeitado se a
+        Compra já estiver finalizada (RN-05.4).
       operationId: adicionarItemExtra
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [nome]
-              properties:
-                nome:
-                  type: string
-                  minLength: 1
-                quantidade:
-                  type: integer
-                  minimum: 1
-                  default: 1
-                categoriaId:
-                  type: string
-                codigoBarras:
-                  type: string
+              $ref: "#/components/schemas/AdicionarItemDespensaOuCompra"
       responses:
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -671,6 +842,83 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "204":
           description: Item removido
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+
+  /compras/{id}/itens/{itemId}/sku:
+    parameters:
+      - $ref: "#/components/parameters/CompraId"
+      - $ref: "#/components/parameters/ItemCompraId"
+    post:
+      tags: [Compras]
+      summary: Vincula (ou cria) um ProdutoSku a um item do Carrinho
+      description: >
+        Opcional — vincular um SKU específico ao marcar um item como comprado
+        não é obrigatório, só o preço (RN-03.1 inalterada). Usado pelo fluxo de
+        scan/seleção manual de marca (Fase 4). Aceita SKU já conhecido por
+        `produtoSkuId`, por `codigoBarras` (cria um SKU novo se vier `nome`
+        junto e o código for desconhecido), ou por `nome` manual. Rejeita com
+        400 se o SKU resolvido pertencer a um Produto genérico diferente do
+        item. Retorna o item atualizado junto com o preço sugerido (RN-03.7,
+        priorizando histórico do SKU e caindo para o genérico).
+      operationId: vincularSkuAoItemCompra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Informe ao menos um entre produtoSkuId, codigoBarras ou nome
+              properties:
+                produtoSkuId:
+                  type: string
+                codigoBarras:
+                  type: string
+                nome:
+                  type: string
+                marca:
+                  type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: SKU vinculado, com preço sugerido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item, precoSugerido]
+                properties:
+                  item:
+                    $ref: "#/components/schemas/ItemCompra"
+                  precoSugerido:
+                    type: number
+                    nullable: true
+        "400":
+          description: Dados inválidos, ou SKU pertence a um Produto genérico diferente do item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Item/Compra não encontrado, ou código de barras desconhecido (`details.codigoBarrasDesconhecido`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+    delete:
+      tags: [Compras]
+      summary: Desvincula o SKU de um item do Carrinho
+      operationId: desvincularSkuDoItemCompra
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: SKU desvinculado
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -979,6 +1227,12 @@ components:
       required: true
       schema:
         type: string
+    ProdutoSkuId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     SupermercadoId:
       name: id
       in: path
@@ -1093,9 +1347,6 @@ components:
           type: string
         nome:
           type: string
-        codigoBarras:
-          type: string
-          nullable: true
         categoriaId:
           type: string
         createdAt:
@@ -1112,6 +1363,77 @@ components:
           properties:
             categoria:
               $ref: "#/components/schemas/Categoria"
+
+    ProdutoSku:
+      type: object
+      required: [id, produtoId, nome, createdAt, updatedAt]
+      description: >
+        Embalagem/marca específica de um Produto genérico. `codigoBarras`
+        identifica a embalagem (não o genérico) e é único quando presente.
+      properties:
+        id:
+          type: string
+        produtoId:
+          type: string
+        nome:
+          type: string
+        marca:
+          type: string
+          nullable: true
+        codigoBarras:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProdutoSkuComProduto:
+      allOf:
+        - $ref: "#/components/schemas/ProdutoSku"
+        - type: object
+          properties:
+            produto:
+              $ref: "#/components/schemas/ProdutoComCategoria"
+
+    AdicionarItemDespensaOuCompra:
+      type: object
+      description: >
+        Either-or: informe exatamente um entre `produtoId`, `produtoSkuId` ou
+        `nome`. Com `nome` e `tipo: SKU`, `produtoGenericoNome` é obrigatório.
+      properties:
+        produtoId:
+          type: string
+          description: Atalho para reaproveitar um Produto genérico já existente.
+        produtoSkuId:
+          type: string
+          description: Atalho para reaproveitar um ProdutoSku já existente.
+        nome:
+          type: string
+          minLength: 1
+          description: Nome do item a criar/reaproveitar por nome (genérico ou SKU, conforme `tipo`).
+        tipo:
+          type: string
+          enum: [GENERICO, SKU]
+          default: GENERICO
+        produtoGenericoNome:
+          type: string
+          description: >
+            Obrigatório quando tipo=SKU e nome é usado — nome do Produto
+            genérico pai.
+        marca:
+          type: string
+        codigoBarras:
+          type: string
+        quantidade:
+          type: integer
+          minimum: 1
+          default: 1
+        categoriaId:
+          type: string
+          description: Usado apenas se um Produto genérico novo precisar ser criado.
 
     Supermercado:
       type: object
@@ -1139,17 +1461,32 @@ components:
 
     ItemDespensa:
       type: object
-      required: [id, produtoId, quantidade, produto, createdAt, updatedAt]
+      required: [id, produtoId, produtoSkuId, quantidade, createdAt, updatedAt]
+      description: >
+        Referencia exatamente um entre `produto` (genérico) e `produtoSku`
+        (SKU específico) — o outro par (id + objeto) vem nulo.
       properties:
         id:
           type: string
         produtoId:
           type: string
+          nullable: true
+        produtoSkuId:
+          type: string
+          nullable: true
         quantidade:
           type: integer
           minimum: 1
         produto:
-          $ref: "#/components/schemas/ProdutoComCategoria"
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ProdutoComCategoria"
+        produtoSku:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ProdutoSkuComProduto"
         createdAt:
           type: string
           format: date-time
@@ -1177,7 +1514,7 @@ components:
 
     ItemCompra:
       type: object
-      required: [id, compraId, produtoId, quantidade, comprado, origem, produto, createdAt, updatedAt]
+      required: [id, compraId, produtoId, produtoSkuId, quantidade, comprado, origem, produto, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1185,6 +1522,13 @@ components:
           type: string
         produtoId:
           type: string
+          description: Produto genérico — sempre presente, mesmo quando produtoSkuId também está definido.
+        produtoSkuId:
+          type: string
+          nullable: true
+          description: >
+            SKU específico vinculado a este item — opcional mesmo com o item
+            marcado como comprado (só o preço é obrigatório, RN-03.1).
         quantidade:
           type: integer
           minimum: 1
@@ -1202,6 +1546,11 @@ components:
           nullable: true
         produto:
           $ref: "#/components/schemas/ProdutoComCategoria"
+        produtoSku:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ProdutoSku"
         createdAt:
           type: string
           format: date-time

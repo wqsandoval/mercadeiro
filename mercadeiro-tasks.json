@@ -1016,6 +1016,247 @@
         "regras-de-negocio.md#4.1-despensa"
       ],
       "notes": ""
+    },
+    {
+      "id": "45",
+      "phase": "fase-0",
+      "title": "Schema: novo modelo ProdutoSku + FKs opcionais em ItemDespensa/ItemCompra/PrecoHistorico",
+      "description": "Adicionar ProdutoSku (marca/embalagem específica, ex: 'Leite Elegê Semidesnatado 1L') subordinado ao Produto genérico. Mover codigoBarras de Produto para ProdutoSku. ItemDespensa passa a referenciar ou o genérico ou o SKU (either/or); ItemCompra e PrecoHistorico ganham produtoSkuId opcional mantendo produtoId obrigatório.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "4"
+      ],
+      "acceptanceCriteria": [
+        "Modelo ProdutoSku criado com produtoId (FK obrigatória), nome, marca opcional, codigoBarras único opcional",
+        "Produto perde o campo codigoBarras",
+        "ItemDespensa.produtoId vira opcional, ganha produtoSkuId opcional, com exatamente um dos dois preenchido",
+        "ItemCompra e PrecoHistorico ganham produtoSkuId opcional sem afetar produtoId (que continua obrigatório)"
+      ],
+      "relatedRequirements": [],
+      "notes": "Decisão 2026-07-03: histórico de preço passa a viver no nível do SKU; Despensa pode referenciar genérico OU SKU diretamente; vincular SKU ao marcar item do Carrinho como comprado é opcional (só preço continua obrigatório, RN-03.1 inalterada). Ver plano em C:\\Users\\anoni\\.claude\\plans\\uma-mudan-a-que-pode-glimmering-fiddle.md."
+    },
+    {
+      "id": "46",
+      "phase": "fase-0",
+      "title": "Migration: criar produtos_sku, migrar dados de codigoBarras, CHECK e índices únicos parciais",
+      "description": "Gerar migration com --create-only e editar o SQL à mão: criar tabela produtos_sku, migrar codigoBarras existente de Produto para ProdutoSku antes de dropar a coluna, adicionar CHECK exatamente-um-dos-dois em ItemDespensa, e trocar o unique de ItemCompra por dois índices únicos parciais (com/sem SKU).",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "45"
+      ],
+      "acceptanceCriteria": [
+        "Migration aplica limpo em banco local recriado do zero",
+        "Nenhum código de barras existente é perdido (migrado para ProdutoSku antes do DROP COLUMN)",
+        "CHECK constraint impede ItemDespensa com os dois FKs nulos ou os dois preenchidos",
+        "Dois SKUs diferentes do mesmo genérico podem coexistir como linhas separadas em uma Compra; duas adições do mesmo item sem SKU ainda somam quantidade (não duplicam)",
+        "tests/global-setup.ts atualizado para truncar produtos_sku"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "47",
+      "phase": "fase-1",
+      "title": "lib/produtos.ts: separar encontrarOuCriarProduto (genérico) de encontrarOuCriarProdutoSku",
+      "description": "encontrarOuCriarProduto perde a lógica de codigoBarras (fica só dedupe por nome). Nova função encontrarOuCriarProdutoSku resolve por codigoBarras primeiro, senão por (produtoId, nome) case-insensitive, com backfill de código de barras.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "46"
+      ],
+      "acceptanceCriteria": [
+        "encontrarOuCriarProduto não aceita mais codigoBarras",
+        "encontrarOuCriarProdutoSku reaproveita SKU existente por código de barras ou por nome dentro do mesmo genérico, criando o genérico se necessário",
+        "Backfill de código de barras em SKU existente sem código funciona igual ao comportamento antigo em Produto"
+      ],
+      "relatedRequirements": [
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "48",
+      "phase": "fase-1",
+      "title": "Endpoints de Produto (genérico): remover codigoBarras, endurecer guarda de delete",
+      "description": "Remover codigoBarras dos schemas de criar/atualizar/listar Produto. DELETE /produtos/:id passa a bloquear também quando o genérico tem ProdutoSku em uso.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "47"
+      ],
+      "acceptanceCriteria": [
+        "POST/PUT/GET /produtos não aceitam nem retornam mais codigoBarras",
+        "GET /produtos/:id/precos continua funcionando sem alteração, agregando por produtoId",
+        "DELETE /produtos/:id retorna 409 se houver ProdutoSku vinculado em uso"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "49",
+      "phase": "fase-1",
+      "title": "Novos endpoints CRUD de ProdutoSku",
+      "description": "Criar backend/src/routes/produtos-sku.ts (registrado em server.ts): GET /produtos/:id/skus, GET /produtos-sku (por codigoBarras/busca), POST/GET/PUT/DELETE /produtos-sku/:id, GET /produtos-sku/:id/precos (equivalente ao de Produto, agregando por produtoSkuId).",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "47"
+      ],
+      "acceptanceCriteria": [
+        "Lookup por código de barras retorna o SKU correspondente",
+        "GET /produtos-sku/:id/precos agrega PrecoHistorico por produtoSkuId com o mesmo formato de resposta do endpoint de Produto",
+        "DELETE /produtos-sku/:id retorna 409 se referenciado por ItemDespensa ou ItemCompra"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "50",
+      "phase": "fase-1",
+      "title": "Despensa: adicionar item referenciando genérico OU SKU",
+      "description": "adicionarItemSchema vira união discriminada (GENERICO | SKU) com atalhos produtoId/produtoSkuId para reaproveitar item já existente. Dedupe passa a checar por produtoId ou produtoSkuId conforme o ramo. GET /despensa agrupa pela categoria efetiva (do genérico direto ou via produtoSku.produto.categoria).",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "49"
+      ],
+      "acceptanceCriteria": [
+        "Adicionar por nome genérico continua funcionando exatamente como hoje (comportamento default inalterado)",
+        "Adicionar indicando marca cria/reaproveita o ProdutoSku e o Produto genérico correspondente",
+        "Mesmo SKU adicionado duas vezes soma quantidade (RN 4.1 espelhada no nível SKU)",
+        "Item genérico e item SKU do mesmo genérico ficam em linhas distintas na Despensa",
+        "Requisição com os dois FKs (ou nenhum) é rejeitada com 400 antes de chegar ao banco"
+      ],
+      "relatedRequirements": [
+        "UC-02",
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "51",
+      "phase": "fase-1",
+      "title": "Compra: SKU opcional em item extra, cópia Despensa→Carrinho, vínculo/desvínculo de SKU, preço sugerido em cascata",
+      "description": "itemCompraInclude passa a incluir produtoSku. Cópia Despensa→Carrinho repassa produtoId (do genérico ou de produtoSku.produtoId) e produtoSkuId. Item extra aceita o mesmo payload genérico/SKU da Despensa. Novo POST/DELETE /compras/:id/itens/:itemId/sku vincula/desvincula um SKU (por id, código de barras ou nome), validando que o SKU pertence ao mesmo genérico do item. Helper sugerirPreco prioriza histórico do SKU e cai para o genérico (RN-03.7 estendida). finalizar grava produtoSkuId em PrecoHistorico e recria ItemDespensa preservando se era genérico ou SKU.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "50"
+      ],
+      "acceptanceCriteria": [
+        "Marcar item como comprado continua exigindo só o preço, nunca o SKU (RN-03.1 inalterada)",
+        "Duas SKUs diferentes do mesmo genérico podem ser linhas separadas na mesma Compra",
+        "Vincular um código de barras que pertence a outro genérico retorna 400 explicando o conflito, sem vincular",
+        "Código de barras desconhecido sem nome retorna 404; com nome, cria um novo SKU",
+        "finalizar grava PrecoHistorico.produtoSkuId quando o item comprado tinha SKU vinculado",
+        "Item planejado SKU'd que não foi comprado volta para a Despensa ainda vinculado ao mesmo SKU (não é rebaixado a genérico)"
+      ],
+      "relatedRequirements": [
+        "UC-03",
+        "UC-05",
+        "RN-03.1",
+        "RN-03.7",
+        "RN-05.1",
+        "RN-05.2"
+      ],
+      "notes": "Endpoint de vínculo de SKU e sugestão de preço são consumidos pela Fase 4 (Carrinho, ainda stub) — este task só prepara o contrato de backend."
+    },
+    {
+      "id": "52",
+      "phase": "fase-1",
+      "title": "Atualizar openapi.yaml para ProdutoSku e novos endpoints",
+      "description": "Remover codigoBarras de Produto; adicionar schemas ProdutoSku/ProdutoSkuComProduto; tornar produto/produtoId nullable e adicionar produtoSku/produtoSkuId em ItemDespensa/ItemCompra; documentar /produtos-sku*, /produtos/{id}/skus, /compras/{id}/itens/{itemId}/sku.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "51"
+      ],
+      "acceptanceCriteria": [
+        "openapi.yaml reflete exatamente os schemas e endpoints implementados nas tasks 48-51",
+        "Lint/validação do openapi (se configurada) passa sem erros"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "53",
+      "phase": "fase-9",
+      "title": "Testes de API para ProdutoSku, Despensa e Compra com SKU",
+      "description": "Atualizar 02-produtos.spec.ts (remover suposições de codigoBarras em Produto); criar 02b-produtos-sku.spec.ts; estender 03-despensa.spec.ts e 04-compras.spec.ts com os casos de genérico/SKU; teste de regressão em 06-analitico.spec.ts confirmando agregação correta com item SKU'd.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "51"
+      ],
+      "acceptanceCriteria": [
+        "Cobertura de: criar/reaproveitar SKU por código de barras e por nome, backfill de código de barras, 409 ao deletar SKU em uso",
+        "Cobertura de: adicionar item genérico vs SKU na Despensa, dedupe de cada um, rejeição de payload ambíguo",
+        "Cobertura de: duas SKUs do mesmo genérico numa Compra, vínculo/desvínculo de SKU no Carrinho, mismatch de código de barras, finalizar preservando produtoSkuId",
+        "Suíte completa (API + UI) passando, incluindo 00-auth, 01-categorias, 05-supermercados inalterados"
+      ],
+      "relatedRequirements": [
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "54",
+      "phase": "fase-3",
+      "title": "Frontend: serviços despensa.ts/compras.ts com tipos e payload genérico/SKU",
+      "description": "Adicionar interface ProdutoSku; ItemDespensa.produto/ItemCompra.produto viram nullable com produtoSku nullable correspondente; adicionarItemDespensa aceita payload discriminado; novas funções vincularSkuAoItem/desvincularSkuDoItem em compras.ts para a Fase 4 consumir depois.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "52"
+      ],
+      "acceptanceCriteria": [
+        "Tipos TypeScript refletem exatamente o novo contrato de API",
+        "Chamada default (sem marca) continua enviando o payload genérico como hoje"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "55",
+      "phase": "fase-3",
+      "title": "DespensaView.vue: toggle opcional '+ marca' para adicionar item como SKU",
+      "description": "Adicionar link/toggle discreto ao lado do campo 'o que está faltando?' que revela um campo de marca opcional e muda o payload para o formato SKU. Sem usar o toggle, comportamento idêntico ao atual. Card do item exibe produto.nome ou produtoSku.nome (+ marca).",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "54"
+      ],
+      "acceptanceCriteria": [
+        "Fluxo default (sem toggle) idêntico à UX atual — nenhuma regressão",
+        "Usar o toggle cria um ItemDespensa vinculado a um ProdutoSku, exibido com a marca no card",
+        "Item continua agrupado pela categoria do genérico correspondente"
+      ],
+      "relatedRequirements": [
+        "UC-02"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "56",
+      "phase": "fase-3",
+      "title": "Teste de UI do toggle '+ marca' na Despensa + verificação final",
+      "description": "Estender tests/ui/despensa.spec.ts cobrindo o novo toggle. Rodar prisma migrate + seed em banco limpo, build do backend e suíte Playwright completa (API + UI) como verificação final da mudança de schema.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "55",
+        "53"
+      ],
+      "acceptanceCriteria": [
+        "Novo teste de UI cobre preencher nome genérico + marca via toggle e confirma o card renderizado",
+        "Casos de UI existentes continuam passando sem alteração",
+        "npx prisma migrate dev aplica limpo em banco recriado do zero",
+        "Suíte Playwright completa (API + UI) verde"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
     }
   ]
 }

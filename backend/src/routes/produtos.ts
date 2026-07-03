@@ -1,37 +1,33 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { encontrarOuCriarProduto, resolverCategoriaId } from "../lib/produtos.js";
+import { agregarHistoricoPrecos, encontrarOuCriarProduto, resolverCategoriaId } from "../lib/produtos.js";
 import { badRequest, conflict, notFound } from "../lib/http-error.js";
 
 const criarProdutoSchema = z.object({
   nome: z.string().trim().min(1),
   categoriaId: z.string().optional(),
-  codigoBarras: z.string().trim().min(1).optional(),
 });
 
 const atualizarProdutoSchema = z.object({
   nome: z.string().trim().min(1).optional(),
   categoriaId: z.string().optional(),
-  codigoBarras: z.string().trim().min(1).nullable().optional(),
 });
 
 const listarProdutosQuerySchema = z.object({
   categoriaId: z.string().optional(),
   busca: z.string().optional(),
-  codigoBarras: z.string().optional(),
 });
 
 export async function produtosRoutes(app: FastifyInstance) {
   app.get("/produtos", async (request) => {
     const parsed = listarProdutosQuerySchema.safeParse(request.query);
     if (!parsed.success) throw badRequest("Parâmetros inválidos", parsed.error.issues);
-    const { categoriaId, busca, codigoBarras } = parsed.data;
+    const { categoriaId, busca } = parsed.data;
 
     return prisma.produto.findMany({
       where: {
         categoriaId,
-        codigoBarras,
         nome: busca ? { contains: busca, mode: "insensitive" } : undefined,
       },
       include: { categoria: true },
@@ -87,40 +83,7 @@ export async function produtosRoutes(app: FastifyInstance) {
       orderBy: { data: "desc" },
     });
 
-    if (registros.length === 0) {
-      return {
-        ultimoPreco: null,
-        menorPreco: null,
-        precoMedio: null,
-        amostraPequena: true,
-        porSupermercado: [],
-      };
-    }
-
-    const precos = registros.map((r) => Number(r.preco));
-    const porSupermercado = new Map<
-      string,
-      { supermercado: (typeof registros)[number]["supermercado"]; precos: number[] }
-    >();
-    for (const registro of registros) {
-      const grupo =
-        porSupermercado.get(registro.supermercadoId) ??
-        { supermercado: registro.supermercado, precos: [] };
-      grupo.precos.push(Number(registro.preco));
-      porSupermercado.set(registro.supermercadoId, grupo);
-    }
-
-    return {
-      ultimoPreco: precos[0],
-      menorPreco: Math.min(...precos),
-      precoMedio: precos.reduce((a, b) => a + b, 0) / precos.length,
-      amostraPequena: registros.length < 2,
-      porSupermercado: Array.from(porSupermercado.values()).map(({ supermercado, precos: p }) => ({
-        supermercado,
-        precoMedio: p.reduce((a, b) => a + b, 0) / p.length,
-        quantidadeRegistros: p.length,
-      })),
-    };
+    return agregarHistoricoPrecos(registros);
   });
 
   app.delete("/produtos/:id", async (request, reply) => {
@@ -128,12 +91,16 @@ export async function produtosRoutes(app: FastifyInstance) {
     const existente = await prisma.produto.findUnique({ where: { id } });
     if (!existente) throw notFound("Produto");
 
-    const [emDespensa, emCompra] = await Promise.all([
+    const [emDespensa, emCompra, comSkus] = await Promise.all([
       prisma.itemDespensa.count({ where: { produtoId: id } }),
       prisma.itemCompra.count({ where: { produtoId: id } }),
+      prisma.produtoSku.count({ where: { produtoId: id } }),
     ]);
     if (emDespensa > 0 || emCompra > 0) {
       throw conflict("Produto está em uso na Despensa ou em uma Compra e não pode ser removido");
+    }
+    if (comSkus > 0) {
+      throw conflict("Produto possui SKUs cadastrados e não pode ser removido");
     }
 
     await prisma.produto.delete({ where: { id } });
