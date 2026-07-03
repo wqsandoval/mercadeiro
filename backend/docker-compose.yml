@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mercadeiro-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mercadeiro
+      POSTGRES_PASSWORD: mercadeiro
+      POSTGRES_DB: mercadeiro
+    ports:
+      - "5432:5432"
+    volumes:
+      - mercadeiro-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  mercadeiro-postgres-data:

@@ -1,0 +1,1407 @@
+openapi: 3.0.3
+info:
+  title: Mercadeiro API
+  description: >
+    API do Mercadeiro — app de lista de compras domiciliar (Despensa → Carrinho →
+    Finalizar Compra → Analítico). Documenta os endpoints da Fase 1 (API core).
+    Regras de negócio referenciadas (RN-xx) e casos de uso (UC-xx) estão detalhados
+    em `mercadeiro-regras-de-negocio.md`, na raiz do monorepo.
+
+
+    **Autenticação:** todas as rotas exigem `Authorization: Bearer <token>`,
+    exceto `/health`. Token único de aplicação (app single-user, sem contas —
+    ver decisão em `mercadeiro-regras-de-negocio.md` §5.8), configurado em
+    `API_BEARER_TOKEN` no `.env` do backend. Requisições sem token válido
+    recebem `401 Unauthorized`.
+  version: 0.1.0
+servers:
+  - url: http://localhost:3333
+    description: Ambiente local de desenvolvimento
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+    description: Status da API e da conexão com o banco.
+  - name: Categorias
+    description: Agrupadores de produtos, pré-seedados no banco (Frutas, Laticínios, ... "Outros" como fallback).
+  - name: Produtos
+    description: Itens genéricos e reutilizáveis, reaproveitados por nome (Regra 4.1) entre Despensa e Compras.
+  - name: Despensa
+    description: UC-02 — o que a família precisa comprar (lista viva, sem data).
+  - name: Compras
+    description: UC-02/UC-03/UC-05 — ciclo de vida da sessão de compra (Carrinho e Finalização).
+  - name: Supermercados
+    description: Locais de compra, identificados por nome + endereço; base do histórico de preço por loja.
+  - name: Analítico
+    description: UC-06 — agregações de gasto, variação de preço e alertas.
+  - name: Geocoding
+    description: Camada trocável de geocoding (Nominatim por padrão) usada para sugerir o supermercado a partir do GPS.
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Verifica status da API e da conexão com o banco
+      operationId: verificarSaude
+      security: []
+      responses:
+        "200":
+          description: API e banco de dados operacionais
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  database:
+                    type: string
+                    example: connected
+
+  /categorias:
+    get:
+      tags: [Categorias]
+      summary: Lista todas as categorias, ordenadas por `ordem`
+      operationId: listarCategorias
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Lista de categorias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Categoria"
+    post:
+      tags: [Categorias]
+      summary: Cria uma nova categoria
+      operationId: criarCategoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                ordem:
+                  type: integer
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "201":
+          description: Categoria criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Categoria"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /categorias/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CategoriaId"
+    get:
+      tags: [Categorias]
+      summary: Busca uma categoria por id
+      operationId: buscarCategoria
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Categoria encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Categoria"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Categorias]
+      summary: Atualiza nome e/ou ordem de uma categoria
+      operationId: atualizarCategoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                ordem:
+                  type: integer
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Categoria atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Categoria"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Categorias]
+      summary: Remove uma categoria sem produtos vinculados
+      operationId: removerCategoria
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: Categoria removida
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Categoria possui produtos vinculados e não pode ser removida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /produtos:
+    get:
+      tags: [Produtos]
+      summary: Lista produtos, com filtros opcionais
+      operationId: listarProdutos
+      parameters:
+        - name: categoriaId
+          in: query
+          schema:
+            type: string
+        - name: busca
+          in: query
+          description: Busca por substring no nome (case-insensitive)
+          schema:
+            type: string
+        - name: codigoBarras
+          in: query
+          schema:
+            type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Lista de produtos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProdutoComCategoria"
+    post:
+      tags: [Produtos]
+      summary: Cria um produto ou reaproveita um existente com o mesmo nome
+      description: >
+        Regra 4.1: se já existir um Produto com o mesmo nome (case-insensitive),
+        o registro existente é reaproveitado em vez de duplicado (status 200).
+        Produto novo sem `categoriaId` válido cai na categoria "Outros".
+      operationId: criarProduto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                categoriaId:
+                  type: string
+                  description: Se omitido ou inválido, cai no fallback "Outros"
+                codigoBarras:
+                  type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Produto já existente reaproveitado (RN 4.1)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoComCategoria"
+        "201":
+          description: Produto criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoComCategoria"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /produtos/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProdutoId"
+    get:
+      tags: [Produtos]
+      summary: Busca um produto por id
+      operationId: buscarProduto
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Produto encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProdutoComCategoria"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Produtos]
+      summary: Atualiza nome, categoria e/ou código de barras de um produto
+      operationId: atualizarProduto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                categoriaId:
+                  type: string
+                  description: Se inválido, cai no fallback "Outros"
+                codigoBarras:
+                  type: string
+                  nullable: true
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Produto atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Produto"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Produtos]
+      summary: Remove um produto sem uso na Despensa ou em Compras
+      operationId: removerProduto
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: Produto removido
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Produto está em uso na Despensa ou em uma Compra
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /produtos/{id}/precos:
+    parameters:
+      - $ref: "#/components/parameters/ProdutoId"
+    get:
+      tags: [Produtos]
+      summary: Histórico de preço do produto, agrupado por supermercado
+      description: >
+        Base do preço sugerido ao escanear (RN-03.7) e do ranking por supermercado
+        (RN-07.3). `amostraPequena` é true com menos de 2 registros de PrecoHistorico
+        (RN-07.4) — a informação é exibida mesmo assim, nunca ocultada.
+      operationId: buscarPrecosDoProduto
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Agregados de preço do produto
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrecosProduto"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /despensa:
+    get:
+      tags: [Despensa]
+      summary: Lista os itens da Despensa agrupados por categoria
+      description: >
+        RN-02.2: grupos ordenados pela `ordem` da categoria; itens dentro do grupo
+        ordenados por ordem de inserção. Categorias sem itens ativos não aparecem.
+      operationId: listarDespensa
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Grupos de itens por categoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GrupoDespensa"
+    post:
+      tags: [Despensa]
+      summary: Adiciona um item à Despensa (cria produto se necessário)
+      description: >
+        Regra 4.1: se já existir um ItemDespensa para o produto (mesmo nome,
+        case-insensitive), soma a quantidade em vez de duplicar a linha.
+      operationId: adicionarItemDespensa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                quantidade:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                categoriaId:
+                  type: string
+                codigoBarras:
+                  type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "201":
+          description: Item criado ou quantidade somada ao item existente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemDespensa"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /despensa/{id}/quantidade:
+    patch:
+      tags: [Despensa]
+      summary: Ajusta a quantidade de um item via incremento/decremento
+      description: >
+        RN-02.1: quantidade mínima é 1. Um delta que levaria a quantidade a 0 ou
+        menos remove o item diretamente, sem confirmação.
+      operationId: ajustarQuantidadeDespensa
+      parameters:
+        - $ref: "#/components/parameters/ItemDespensaId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delta]
+              properties:
+                delta:
+                  type: integer
+                  description: Valor a somar à quantidade atual; não pode ser zero
+                  example: -1
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Item removido ou item com quantidade atualizada
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ItemDespensa"
+                  - $ref: "#/components/schemas/RemocaoConfirmada"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /despensa/{id}:
+    delete:
+      tags: [Despensa]
+      summary: Remove um item da Despensa imediatamente
+      operationId: removerItemDespensa
+      parameters:
+        - $ref: "#/components/parameters/ItemDespensaId"
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: Item removido
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /compras/atual:
+    get:
+      tags: [Compras]
+      summary: Busca a Compra em andamento, se existir
+      operationId: buscarCompraAtual
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Compra em andamento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+        "404":
+          description: Não há Compra em andamento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /compras:
+    post:
+      tags: [Compras]
+      summary: Inicia uma sessão de compra, ou retoma a existente
+      description: >
+        RN-02.4/RN-05.5: só pode existir uma Compra "em andamento" por vez. Se já
+        existir uma, retorna-a (status 200) em vez de criar outra. Ao criar uma
+        nova (status 201), copia todos os ItemDespensa ativos para ItemCompra como
+        `origem: PLANEJADO` e `comprado: false`, sem remover nada da Despensa
+        (RN-02.3).
+      operationId: criarOuRetomarCompra
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                supermercadoId:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Compra em andamento existente, retomada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+        "201":
+          description: Nova Compra criada a partir da Despensa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /compras/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CompraId"
+    get:
+      tags: [Compras]
+      summary: Busca uma Compra por id, com seus itens
+      operationId: buscarCompra
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Compra encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Compras]
+      summary: Atualiza o supermercado e/ou a localização da Compra
+      description: >
+        RN-03.5: o supermercado pode ser trocado manualmente a qualquer momento
+        antes de finalizar, sem afetar itens já marcados. RN-05.4: rejeitado se a
+        Compra já estiver finalizada.
+      operationId: atualizarCompra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                supermercadoId:
+                  type: string
+                  nullable: true
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Compra atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+
+  /compras/{id}/itens:
+    parameters:
+      - $ref: "#/components/parameters/CompraId"
+    post:
+      tags: [Compras]
+      summary: Adiciona um item extra (não planejado) à Compra
+      description: >
+        UC-03: cria um ItemCompra com `origem: EXTRA`, `comprado: false` e sem
+        preço. Se o produto já tiver um item extra nesta Compra, soma a
+        quantidade em vez de duplicar. Rejeitado se a Compra já estiver
+        finalizada (RN-05.4).
+      operationId: adicionarItemExtra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                quantidade:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                categoriaId:
+                  type: string
+                codigoBarras:
+                  type: string
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "201":
+          description: Item extra criado (ou quantidade somada a um existente)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemCompra"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+
+  /compras/{id}/itens/{itemId}:
+    parameters:
+      - $ref: "#/components/parameters/CompraId"
+      - $ref: "#/components/parameters/ItemCompraId"
+    patch:
+      tags: [Compras]
+      summary: Marca/desmarca um item como comprado, define preço, quantidade ou código lido
+      description: >
+        RN-03.1: um item só pode ser marcado como comprado (`comprado: true`) se
+        já tiver `precoUnitario` definido ou se ele for informado nesta mesma
+        requisição — caso contrário, 400. Desmarcar (`comprado: false`) mantém o
+        preço salvo. Rejeitado se a Compra já estiver finalizada (RN-05.4).
+      operationId: atualizarItemCompra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Ao menos um campo deve ser informado
+              properties:
+                comprado:
+                  type: boolean
+                precoUnitario:
+                  type: number
+                  minimum: 0
+                  exclusiveMinimum: true
+                  nullable: true
+                codigoBarrasLido:
+                  type: string
+                quantidade:
+                  type: integer
+                  minimum: 1
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Item atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemCompra"
+        "400":
+          description: Dados inválidos, ou tentativa de marcar como comprado sem preço (RN-03.1)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+    delete:
+      tags: [Compras]
+      summary: Remove um item da Compra
+      operationId: removerItemCompra
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: Item removido
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+
+  /compras/{id}/itens/{itemId}/quantidade:
+    parameters:
+      - $ref: "#/components/parameters/CompraId"
+      - $ref: "#/components/parameters/ItemCompraId"
+    patch:
+      tags: [Compras]
+      summary: Ajusta a quantidade de um item da Compra via incremento/decremento
+      description: >
+        Mesmo padrão do stepper da Despensa: um delta que levaria a quantidade a
+        0 ou menos remove o item diretamente.
+      operationId: ajustarQuantidadeItemCompra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delta]
+              properties:
+                delta:
+                  type: integer
+                  description: Valor a somar à quantidade atual; não pode ser zero
+                  example: -1
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Item removido ou item com quantidade atualizada
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ItemCompra"
+                  - $ref: "#/components/schemas/RemocaoConfirmada"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+
+  /compras/{id}/finalizar:
+    parameters:
+      - $ref: "#/components/parameters/CompraId"
+    post:
+      tags: [Compras]
+      summary: Finaliza a Compra, aplicando os efeitos na Despensa e no histórico de preço
+      description: >
+        RN-05.1 a RN-05.4, operação transacional (tudo ou nada):
+        * Item planejado comprado → remove o ItemDespensa correspondente e grava PrecoHistorico.
+        * Item extra comprado → grava PrecoHistorico, não cria ItemDespensa.
+        * Item planejado não comprado → mantém/recria o ItemDespensa, sem preço.
+        * Item extra não comprado → descartado silenciosamente (RN-05.1).
+
+        Depois de finalizada, a Compra é somente leitura: chamadas repetidas a
+        este endpoint, ou qualquer edição de itens, retornam 409.
+      operationId: finalizarCompra
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Compra finalizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Compra"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CompraFinalizada"
+
+  /supermercados:
+    get:
+      tags: [Supermercados]
+      summary: Lista supermercados
+      operationId: listarSupermercados
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Lista de supermercados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supermercado"
+    post:
+      tags: [Supermercados]
+      summary: Cria um supermercado, ou reaproveita um existente com mesmo nome+endereço
+      description: >
+        Usado pelo fluxo de reverse geocoding (UC-03) para não criar um
+        Supermercado duplicado a cada compra no mesmo local.
+      operationId: criarSupermercado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                endereco:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Supermercado existente reaproveitado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supermercado"
+        "201":
+          description: Supermercado criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supermercado"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /supermercados/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SupermercadoId"
+    get:
+      tags: [Supermercados]
+      summary: Busca um supermercado por id
+      operationId: buscarSupermercado
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Supermercado encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supermercado"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Supermercados]
+      summary: Atualiza dados de um supermercado
+      operationId: atualizarSupermercado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome:
+                  type: string
+                  minLength: 1
+                endereco:
+                  type: string
+                  nullable: true
+                latitude:
+                  type: number
+                  nullable: true
+                longitude:
+                  type: number
+                  nullable: true
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Supermercado atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supermercado"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Supermercados]
+      summary: Remove um supermercado sem compras/histórico vinculados
+      operationId: removerSupermercado
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "204":
+          description: Supermercado removido
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Supermercado possui compras/histórico vinculados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /supermercados/{id}/historico:
+    parameters:
+      - $ref: "#/components/parameters/SupermercadoId"
+    get:
+      tags: [Supermercados]
+      summary: Histórico de preço daquele supermercado, agrupado por produto
+      description: Base do ranking por supermercado (3b) e do comparativo entre mercados (3c).
+      operationId: buscarHistoricoDoSupermercado
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Histórico agregado por produto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoricoProdutoNoSupermercado"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /analitico:
+    get:
+      tags: [Analítico]
+      summary: Agregações de gasto, variação de preço e alertas do período
+      description: >
+        RN-06.1: variação comparada ao período anterior de duração equivalente.
+        RN-06.4/RN-06.5: apenas compras finalizadas dentro do período entram no
+        cálculo — compras em andamento nunca são somadas. Os limiares de alerta
+        (`PRICE_ALERT_THRESHOLD_PERCENT`, `ABSENCE_ALERT_WEEKS`) são configuráveis
+        via variável de ambiente, não hardcoded (RN-06.2/RN-06.3).
+      operationId: buscarAnalitico
+      parameters:
+        - name: periodo
+          in: query
+          schema:
+            type: string
+            enum: [mes, 3m, 6m]
+            default: mes
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Agregações do período
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analitico"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /geocoding/reverse:
+    get:
+      tags: [Geocoding]
+      summary: Reverse geocoding de coordenadas GPS para um supermercado sugerido
+      description: >
+        Consome a interface `GeocodingProvider` (implementação padrão: Nominatim/OSM,
+        trocável por outro provedor sem alterar o código consumidor). Usado pelo
+        Carrinho (UC-03) para sugerir o supermercado a partir do GPS capturado.
+      operationId: reverseGeocode
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "200":
+          description: Resultado do reverse geocoding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultadoGeocoding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+components:
+  parameters:
+    CategoriaId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    ProdutoId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    SupermercadoId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    CompraId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    ItemDespensaId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    ItemCompraId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Token único de aplicação (API_BEARER_TOKEN no .env do backend).
+        Exigido em todas as rotas, exceto /health.
+
+  responses:
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    Unauthorized:
+      description: Token de autenticação ausente ou inválido
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            example: Bearer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BadRequest:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    CompraFinalizada:
+      description: Compra já finalizada é somente leitura (RN-05.4)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          description: >
+            Detalhes adicionais, quando aplicável — formato varia por origem:
+            array de issues do Zod em erros de validação, objeto de metadados
+            do Prisma em conflitos de unicidade, ou ausente.
+
+    RemocaoConfirmada:
+      type: object
+      required: [removido, id]
+      properties:
+        removido:
+          type: boolean
+          enum: [true]
+        id:
+          type: string
+
+    Categoria:
+      type: object
+      required: [id, nome, ordem, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        nome:
+          type: string
+        ordem:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Produto:
+      type: object
+      required: [id, nome, categoriaId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        nome:
+          type: string
+        codigoBarras:
+          type: string
+          nullable: true
+        categoriaId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProdutoComCategoria:
+      allOf:
+        - $ref: "#/components/schemas/Produto"
+        - type: object
+          properties:
+            categoria:
+              $ref: "#/components/schemas/Categoria"
+
+    Supermercado:
+      type: object
+      required: [id, nome, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        nome:
+          type: string
+        endereco:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ItemDespensa:
+      type: object
+      required: [id, produtoId, quantidade, produto, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        produtoId:
+          type: string
+        quantidade:
+          type: integer
+          minimum: 1
+        produto:
+          $ref: "#/components/schemas/ProdutoComCategoria"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    GrupoDespensa:
+      type: object
+      required: [categoria, itens]
+      properties:
+        categoria:
+          $ref: "#/components/schemas/Categoria"
+        itens:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemDespensa"
+
+    OrigemItemCompra:
+      type: string
+      enum: [PLANEJADO, EXTRA]
+      description: >
+        Definida na criação do item e não muda durante a compra.
+        🏠 planejado (veio da Despensa) · ⚡ extra (adicionado durante a compra).
+
+    ItemCompra:
+      type: object
+      required: [id, compraId, produtoId, quantidade, comprado, origem, produto, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        compraId:
+          type: string
+        produtoId:
+          type: string
+        quantidade:
+          type: integer
+          minimum: 1
+        precoUnitario:
+          type: string
+          nullable: true
+          description: Valor decimal serializado como string (ex. "4.50"). Nulo até o item ser comprado.
+          example: "4.50"
+        comprado:
+          type: boolean
+        origem:
+          $ref: "#/components/schemas/OrigemItemCompra"
+        codigoBarrasLido:
+          type: string
+          nullable: true
+        produto:
+          $ref: "#/components/schemas/ProdutoComCategoria"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    StatusCompra:
+      type: string
+      enum: [EM_ANDAMENTO, FINALIZADA]
+
+    Compra:
+      type: object
+      required: [id, status, itens, iniciadaEm, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/StatusCompra"
+        supermercadoId:
+          type: string
+          nullable: true
+        supermercado:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Supermercado"
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        iniciadaEm:
+          type: string
+          format: date-time
+        finalizadaEm:
+          type: string
+          format: date-time
+          nullable: true
+        itens:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemCompra"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PrecoPorSupermercado:
+      type: object
+      required: [supermercado, precoMedio, quantidadeRegistros]
+      properties:
+        supermercado:
+          $ref: "#/components/schemas/Supermercado"
+        precoMedio:
+          type: number
+        quantidadeRegistros:
+          type: integer
+
+    PrecosProduto:
+      type: object
+      required: [ultimoPreco, menorPreco, precoMedio, amostraPequena, porSupermercado]
+      properties:
+        ultimoPreco:
+          type: number
+          nullable: true
+          description: RN-07.1 — preço do PrecoHistorico mais recente, em qualquer supermercado.
+        menorPreco:
+          type: number
+          nullable: true
+        precoMedio:
+          type: number
+          nullable: true
+        amostraPequena:
+          type: boolean
+          description: RN-07.4 — true com menos de 2 registros de PrecoHistorico; a informação parcial é exibida, não ocultada.
+        porSupermercado:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrecoPorSupermercado"
+
+    HistoricoProdutoNoSupermercado:
+      type: object
+      required: [produto, quantidadeRegistros, precoMedio, menorPreco, ultimoPreco]
+      properties:
+        produto:
+          $ref: "#/components/schemas/Produto"
+        quantidadeRegistros:
+          type: integer
+        precoMedio:
+          type: number
+        menorPreco:
+          type: number
+        ultimoPreco:
+          type: number
+
+    GastoPorCategoria:
+      type: object
+      required: [categoriaId, categoria, total]
+      properties:
+        categoriaId:
+          type: string
+        categoria:
+          type: string
+        total:
+          type: number
+
+    AlertaAltaPreco:
+      type: object
+      required: [produtoId, nome, percentualAlta, mediaHistorica, precoAtual]
+      description: RN-06.2 — preço médio recente (últimas 2 ocorrências) excede a média histórica além do limiar configurado.
+      properties:
+        produtoId:
+          type: string
+        nome:
+          type: string
+        percentualAlta:
+          type: number
+        mediaHistorica:
+          type: number
+        precoAtual:
+          type: number
+
+    AlertaAusencia:
+      type: object
+      required: [produtoId, nome, semanasSemComprar]
+      description: RN-06.3 — produto historicamente comprado com regularidade, ausente de compras finalizadas há mais que o limiar configurado.
+      properties:
+        produtoId:
+          type: string
+        nome:
+          type: string
+        semanasSemComprar:
+          type: number
+
+    Analitico:
+      type: object
+      required:
+        - periodo
+        - intervalo
+        - totalGasto
+        - totalGastoAnterior
+        - variacaoPercentual
+        - numeroCompras
+        - gastoPorCategoria
+        - alertas
+      properties:
+        periodo:
+          type: string
+          enum: [mes, 3m, 6m]
+        intervalo:
+          type: object
+          required: [inicio, fim]
+          properties:
+            inicio:
+              type: string
+              format: date-time
+            fim:
+              type: string
+              format: date-time
+        totalGasto:
+          type: number
+        totalGastoAnterior:
+          type: number
+        variacaoPercentual:
+          type: number
+          description: RN-06.1 — variação percentual vs. o período imediatamente anterior de duração equivalente.
+        numeroCompras:
+          type: integer
+        gastoPorCategoria:
+          type: array
+          items:
+            $ref: "#/components/schemas/GastoPorCategoria"
+        alertas:
+          type: object
+          required: [altaDePreco, ausencia]
+          properties:
+            altaDePreco:
+              type: array
+              items:
+                $ref: "#/components/schemas/AlertaAltaPreco"
+            ausencia:
+              type: array
+              items:
+                $ref: "#/components/schemas/AlertaAusencia"
+
+    ResultadoGeocoding:
+      type: object
+      required: [encontrado]
+      properties:
+        encontrado:
+          type: boolean
+        nomeSugerido:
+          type: string
+        enderecoFormatado:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number

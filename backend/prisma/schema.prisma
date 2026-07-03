@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StatusCompra {
+  EM_ANDAMENTO
+  FINALIZADA
+}
+
+enum OrigemItemCompra {
+  PLANEJADO
+  EXTRA
+}
+
+model Categoria {
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  ordem     Int       @default(0)
+  produtos  Produto[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("categorias")
+}
+
+model Produto {
+  id            String          @id @default(cuid())
+  nome          String
+  codigoBarras  String?         @unique
+  categoriaId   String
+  categoria     Categoria       @relation(fields: [categoriaId], references: [id])
+  itensDespensa ItemDespensa[]
+  itensCompra   ItemCompra[]
+  precosHistorico PrecoHistorico[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([nome, categoriaId])
+  @@map("produtos")
+}
+
+model Supermercado {
+  id              String           @id @default(cuid())
+  nome            String
+  endereco        String?
+  latitude        Float?
+  longitude       Float?
+  compras         Compra[]
+  precosHistorico PrecoHistorico[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("supermercados")
+}
+
+// RN-02.2: itens agrupados por categoria (via produto.categoria), ordenados por ordem de inserção (createdAt) dentro da categoria.
+// Regra 4.1: um mesmo Produto não pode ter dois ItemDespensa simultâneos (dedupe por produtoId).
+model ItemDespensa {
+  id         String   @id @default(cuid())
+  produtoId  String   @unique
+  produto    Produto  @relation(fields: [produtoId], references: [id])
+  quantidade Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("itens_despensa")
+}
+
+// RN-02.4 / RN-05.5: só pode existir uma Compra EM_ANDAMENTO por vez (garantido na camada de aplicação).
+model Compra {
+  id            String       @id @default(cuid())
+  status        StatusCompra @default(EM_ANDAMENTO)
+  supermercadoId String?
+  supermercado  Supermercado? @relation(fields: [supermercadoId], references: [id])
+  latitude      Float?
+  longitude     Float?
+  iniciadaEm    DateTime     @default(now())
+  finalizadaEm  DateTime?
+  itens         ItemCompra[]
+  precosHistorico PrecoHistorico[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("compras")
+}
+
+// RN-03.1: comprado só pode ser true quando precoUnitario não é nulo (validado na camada de aplicação).
+// origem é definida na criação e não muda durante a compra (regra 4.2).
+model ItemCompra {
+  id              String            @id @default(cuid())
+  compraId        String
+  compra          Compra            @relation(fields: [compraId], references: [id])
+  produtoId       String
+  produto         Produto           @relation(fields: [produtoId], references: [id])
+  quantidade      Int               @default(1)
+  precoUnitario   Decimal?          @db.Decimal(10, 2)
+  comprado        Boolean           @default(false)
+  origem          OrigemItemCompra
+  codigoBarrasLido String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([compraId, produtoId])
+  @@map("itens_compra")
+}
+
+// Base do módulo Analítico (seção 4.4): todo preço é Produto + Supermercado + Data, originado de uma Compra finalizada.
+model PrecoHistorico {
+  id             String       @id @default(cuid())
+  produtoId      String
+  produto        Produto      @relation(fields: [produtoId], references: [id])
+  supermercadoId String
+  supermercado   Supermercado @relation(fields: [supermercadoId], references: [id])
+  compraId       String
+  compra         Compra       @relation(fields: [compraId], references: [id])
+  preco          Decimal      @db.Decimal(10, 2)
+  data           DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  @@index([produtoId])
+  @@index([supermercadoId])
+  @@index([produtoId, supermercadoId])
+  @@map("precos_historico")
+}

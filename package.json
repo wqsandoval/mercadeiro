@@ -1,0 +1,24 @@
+{
+  "name": "mercadeiro",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "tests"
+  ],
+  "scripts": {
+    "dev": "npm run db:up && concurrently -n backend,frontend -c blue,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "db:up": "npm run db:up --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "test": "npm run test --workspace=tests",
+    "test:api": "npm run test --workspace=tests -- --project=api",
+    "test:frontend": "npm run test --workspace=tests -- --project=ui-setup --project=ui-login --project=ui-app"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

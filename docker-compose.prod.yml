@@ -1,0 +1,56 @@
+# Deploy de produção atrás de um Traefik já existente na VPS (rede externa
+# compartilhada). Uso:
+#
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# Variáveis obrigatórias/documentadas em .env.prod.example.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: mercadeiro-backend:latest
+    container_name: mercadeiro-backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+      PORT: 3333
+      HOST: 0.0.0.0
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-public}"
+      - "traefik.http.routers.mercadeiro-api.rule=Host(`${DOMAIN_API}`)"
+      - "traefik.http.routers.mercadeiro-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.mercadeiro-api.tls=true"
+      - "traefik.http.routers.mercadeiro-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.mercadeiro-api.loadbalancer.server.port=3333"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: https://${DOMAIN_API}
+    image: mercadeiro-frontend:latest
+    container_name: mercadeiro-frontend
+    restart: unless-stopped
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-public}"
+      - "traefik.http.routers.mercadeiro-frontend.rule=Host(`${DOMAIN_FRONTEND}`)"
+      - "traefik.http.routers.mercadeiro-frontend.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.mercadeiro-frontend.tls=true"
+      - "traefik.http.routers.mercadeiro-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.mercadeiro-frontend.loadbalancer.server.port=80"
+
+networks:
+  traefik-public:
+    name: ${TRAEFIK_NETWORK:-traefik-public}
+    external: true

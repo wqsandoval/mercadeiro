@@ -1,0 +1,1021 @@
+{
+  "project": "Mercadeiro",
+  "generatedAt": "2026-07-01",
+  "sourceDocs": [
+    "mercadeiro-plano-de-tarefas.md",
+    "mercadeiro-regras-de-negocio.md"
+  ],
+  "statusValues": [
+    "todo",
+    "in_progress",
+    "blocked",
+    "done"
+  ],
+  "priorityValues": [
+    "high",
+    "medium",
+    "low"
+  ],
+  "phases": [
+    {
+      "id": "fase-0",
+      "name": "Fundação"
+    },
+    {
+      "id": "fase-1",
+      "name": "Backend: API core"
+    },
+    {
+      "id": "fase-2",
+      "name": "Home (3a)"
+    },
+    {
+      "id": "fase-3",
+      "name": "Despensa (2a)"
+    },
+    {
+      "id": "fase-4",
+      "name": "Carrinho (2b)"
+    },
+    {
+      "id": "fase-5",
+      "name": "Finalizar Compra (2c)"
+    },
+    {
+      "id": "fase-6",
+      "name": "Analítico (4a)"
+    },
+    {
+      "id": "fase-7",
+      "name": "Histórico por produto (3b)"
+    },
+    {
+      "id": "fase-8",
+      "name": "Comparativo de supermercados (3c)"
+    },
+    {
+      "id": "fase-9",
+      "name": "Integração e polish"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1",
+      "phase": "fase-0",
+      "title": "Estrutura do monorepo (/frontend, /backend)",
+      "description": "Criar a estrutura de pastas raiz do monorepo, separando frontend e backend, com configuração de workspace.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "Pastas /frontend e /backend existem na raiz, cada uma com seu próprio package.json",
+        "Workspace configurado (npm/pnpm workspaces) permitindo instalar dependências de ambos a partir da raiz",
+        "README raiz explica a estrutura do monorepo e como rodar cada parte"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "2",
+      "phase": "fase-0",
+      "title": "Setup Vue 3 + Vite + Tailwind + Pinia + Vue Router",
+      "description": "Inicializar o projeto frontend com as libs base do stack.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "1"
+      ],
+      "acceptanceCriteria": [
+        "`npm run dev` sobe o frontend sem erros",
+        "Tailwind configurado e uma classe utilitária de teste renderiza estilo corretamente",
+        "Pinia registrado com pelo menos um store de exemplo",
+        "Vue Router configurado com rota inicial funcional"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "3",
+      "phase": "fase-0",
+      "title": "Setup Fastify + Prisma + PostgreSQL (docker local) + .env",
+      "description": "Inicializar o projeto backend com Fastify, Prisma conectado a um Postgres local via docker, e configuração de ambiente.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "1"
+      ],
+      "acceptanceCriteria": [
+        "docker-compose sobe um container Postgres local acessível pelo backend",
+        "Prisma conecta ao banco e `prisma migrate dev` roda sem erro",
+        "Endpoint GET /health retorna 200 com status da API e conexão de banco",
+        ".env.example documentado com todas as variáveis necessárias"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "4",
+      "phase": "fase-0",
+      "title": "Schema do banco: Produto, Categoria, Supermercado, ItemDespensa, Compra, ItemCompra, PrecoHistorico",
+      "description": "Modelar o schema Prisma com todas as entidades centrais e seus relacionamentos, conforme glossário do documento de regras de negócio.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "3"
+      ],
+      "acceptanceCriteria": [
+        "schema.prisma define Produto, Categoria, Supermercado, ItemDespensa, Compra, ItemCompra, PrecoHistorico com relacionamentos corretos",
+        "Compra possui campo de status (em_andamento | finalizada)",
+        "ItemCompra possui campos origem (planejado | extra), comprado (bool) e preço unitário nullable",
+        "Migration inicial aplicada com sucesso em ambiente local"
+      ],
+      "relatedRequirements": [
+        "regras-de-negocio.md#2-entidades-e-glossário"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "4a",
+      "phase": "fase-0",
+      "title": "Seed de categorias pré-definidas",
+      "description": "Popular o banco com a lista fixa de categorias (Frutas, Laticínios, Carnes, Padaria, Higiene, etc.) incluindo 'Outros' como fallback.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "4"
+      ],
+      "acceptanceCriteria": [
+        "Script de seed cria o conjunto pré-definido de categorias incluindo 'Outros'",
+        "Rodar o seed duas vezes não duplica categorias (idempotente)"
+      ],
+      "relatedRequirements": [
+        "regras-de-negocio.md#5.7"
+      ],
+      "notes": "Decisão 2026-07-01: lista pré-definida + fallback 'Outros', sem criação livre de categoria pelo usuário nesta fase."
+    },
+    {
+      "id": "5",
+      "phase": "fase-0",
+      "title": "Design tokens Vue (cores, fontes, sombras sketchy)",
+      "description": "Configurar tokens de design no Tailwind config: paleta de cores, fontes Caveat/Space Mono, sombras estilo 'sketchy'.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "2"
+      ],
+      "acceptanceCriteria": [
+        "tailwind.config define cores, fontes e sombras customizadas do wireframe",
+        "Pelo menos um componente de exemplo consome os tokens configurados"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "6",
+      "phase": "fase-0",
+      "title": "Componentes base: AppShell, Checkbox, QtyStepper, CategoryHeader, Chip, Card, ProgressBar, TabToggle",
+      "description": "Construir a biblioteca de componentes reutilizáveis usados em todas as telas. Atualizado 2026-07-03: StatusBar/PhoneShell (simulação de celular) substituídos por AppShell, um layout genuinamente responsivo.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "5"
+      ],
+      "acceptanceCriteria": [
+        "Cada componente aceita props tipadas e emite eventos documentados",
+        "QtyStepper emite evento de remoção ao decrementar de quantidade 1 (RN-02.1)",
+        "TabToggle suporta estado desabilitado (usado depois para RN-04.1)",
+        "Componentes renderizados isoladamente (storybook ou página de showcase) batem visualmente com o wireframe"
+      ],
+      "relatedRequirements": [
+        "regras-de-negocio.md#RN-02.1"
+      ],
+      "notes": "StatusBar e PhoneShell foram removidos em 2026-07-03 por simularem hardware de smartphone (relógio/sinal/bateria falsos, dimensões fixas de iPhone); substituídos por AppShell (responsivo)."
+    },
+    {
+      "id": "7",
+      "phase": "fase-1",
+      "title": "Endpoints CRUD de Produtos e Categorias",
+      "description": "Implementar endpoints REST para gerenciar Produto e Categoria.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "4a"
+      ],
+      "acceptanceCriteria": [
+        "GET/POST/PUT/DELETE de Produto e Categoria implementados e validados",
+        "Criar Produto com nome já existente reaproveita o registro em vez de duplicar (RN 4.1)",
+        "Produto sempre associado a uma Categoria válida (fallback 'Outros' se não informado)"
+      ],
+      "relatedRequirements": [
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "8",
+      "phase": "fase-1",
+      "title": "Endpoints de Despensa (listar/adicionar/remover/atualizar qtd)",
+      "description": "Implementar API da Despensa cobrindo UC-02.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "7"
+      ],
+      "acceptanceCriteria": [
+        "Listagem retorna itens agrupados por categoria, ordenados por ordem de inserção dentro da categoria (RN-02.2)",
+        "Adicionar item com nome já existente soma quantidade em vez de duplicar (RN 4.1)",
+        "Atualizar quantidade respeita mínimo 1; decrementar de 1 remove o item (RN-02.1)",
+        "Remover item exclui o ItemDespensa da lista"
+      ],
+      "relatedRequirements": [
+        "UC-02",
+        "RN-02.1",
+        "RN-02.2",
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "9",
+      "phase": "fase-1",
+      "title": "Endpoints de Sessão de Compra (criar, adicionar item, marcar comprado, finalizar)",
+      "description": "Implementar API do ciclo de vida da Compra cobrindo UC-02 (ir para carrinho), UC-03 e UC-05.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "8"
+      ],
+      "acceptanceCriteria": [
+        "Criar Compra copia ItemDespensa ativos para ItemCompra como 'planejado' e não comprado, sem remover da Despensa (RN-02.3)",
+        "Se já existe Compra em andamento, endpoint de criação retorna/redireciona para a existente em vez de criar outra (RN-02.4)",
+        "Marcar item como comprado exige preço definido; requisição sem preço é rejeitada (RN-03.1)",
+        "Desmarcar item mantém o preço salvo, apenas volta comprado=false",
+        "Adicionar item extra cria ItemCompra com origem=extra, não comprado, sem preço",
+        "Endpoint de finalizar aplica a lógica dos três blocos (comprados planejados / extras comprados / não comprados) de forma transacional (RN-05.3)",
+        "Compra finalizada fica somente leitura — tentativas de alterar itens após finalizar são rejeitadas (RN-05.4)",
+        "Criar 'Nova Compra' é rejeitado se já existe outra em andamento (RN-05.5)"
+      ],
+      "relatedRequirements": [
+        "UC-02",
+        "UC-03",
+        "UC-05",
+        "RN-02.3",
+        "RN-02.4",
+        "RN-03.1",
+        "RN-05.1",
+        "RN-05.3",
+        "RN-05.4",
+        "RN-05.5"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "10",
+      "phase": "fase-1",
+      "title": "Endpoints de Supermercados (CRUD + histórico de preço por loja)",
+      "description": "Implementar API de Supermercado e consulta de histórico de preço por loja, base para UC-07 e UC-08.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "4"
+      ],
+      "acceptanceCriteria": [
+        "CRUD de Supermercado implementado",
+        "Endpoint retorna histórico de PrecoHistorico agrupado por Produto+Supermercado",
+        "Suporta cálculo de média histórica por mercado (usado no ranking 3b e comparativo 3c)"
+      ],
+      "relatedRequirements": [
+        "RN-07.3",
+        "RN-08.1"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "11",
+      "phase": "fase-1",
+      "title": "Endpoints de Analítico (agregações: gasto por categoria, por período, alertas de variação)",
+      "description": "Implementar API de agregações para o dashboard Analítico, cobrindo UC-06.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "9",
+        "10"
+      ],
+      "acceptanceCriteria": [
+        "Gasto por categoria soma apenas ItemCompra de Compras finalizadas dentro do período (RN-06.4)",
+        "Compras em andamento nunca entram em nenhum cálculo (RN-06.5)",
+        "Variação vs. período anterior compara com o período imediatamente anterior de mesma duração (RN-06.1)",
+        "Alerta de alta de preço e alerta de ausência usam limiares configuráveis (não hardcoded no frontend) — valores iniciais são placeholders sujeitos a calibração futura (RN-06.2, RN-06.3)"
+      ],
+      "relatedRequirements": [
+        "UC-06",
+        "RN-06.1",
+        "RN-06.2",
+        "RN-06.3",
+        "RN-06.4",
+        "RN-06.5"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "11a",
+      "phase": "fase-1",
+      "title": "Camada de abstração para geocoding (Nominatim ↔ Google Places)",
+      "description": "Criar uma interface de geocoding trocável, com implementação inicial via Nominatim/OSM.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "3"
+      ],
+      "acceptanceCriteria": [
+        "Interface GeocodingProvider definida (ex: reverseGeocode(lat, lng))",
+        "Implementação NominatimProvider funcional",
+        "Código consumidor depende apenas da interface, não da implementação concreta"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "12",
+      "phase": "fase-2",
+      "title": "Componente Home: header + saudação",
+      "description": "Construir o header da Home com saudação personalizada, conforme tela 3a.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "6"
+      ],
+      "acceptanceCriteria": [
+        "Header renderiza saudação estática compatível com o layout do wireframe 3a"
+      ],
+      "relatedRequirements": [
+        "UC-01"
+      ],
+      "notes": "Single-user nesta fase — sem lógica de família/conta compartilhada."
+    },
+    {
+      "id": "13",
+      "phase": "fase-2",
+      "title": "Cards de acesso (Despensa, Analítico) com contadores vindos da API",
+      "description": "Implementar os cards de atalho da Home com dados reais.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "12",
+        "8",
+        "11"
+      ],
+      "acceptanceCriteria": [
+        "Card Despensa mostra soma de ItemDespensa ativos (RN-01.1)",
+        "Card Analítico sempre reflete o período 'mês atual', independente de filtro salvo em outra tela (RN-01.2)"
+      ],
+      "relatedRequirements": [
+        "UC-01",
+        "RN-01.1",
+        "RN-01.2"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "14",
+      "phase": "fase-2",
+      "title": "CTA 'Iniciar Compra' → cria sessão de compra",
+      "description": "Implementar o botão de entrada no fluxo de compra a partir da Home.",
+      "status": "done",
+      "priority": "medium",
+      "dependsOn": [
+        "13",
+        "9"
+      ],
+      "acceptanceCriteria": [
+        "CTA sempre habilitado, mesmo com Despensa vazia (RN-01.3)",
+        "Se já existe Compra em andamento, navega direto para o Carrinho dela em vez de criar uma nova (RN-02.4)"
+      ],
+      "relatedRequirements": [
+        "UC-01",
+        "RN-01.3",
+        "RN-02.4"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "15",
+      "phase": "fase-3",
+      "title": "Input rápido de item + integração com API",
+      "description": "Implementar o campo 'o que está faltando?' da tela 2a.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "6",
+        "8"
+      ],
+      "acceptanceCriteria": [
+        "Adicionar item existente soma quantidade em vez de duplicar linha (RN 4.1)",
+        "Produto novo desconhecido cai na categoria 'Outros'"
+      ],
+      "relatedRequirements": [
+        "UC-02",
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "16",
+      "phase": "fase-3",
+      "title": "Lista agrupada por categoria, com qtd (+/−) e remoção",
+      "description": "Implementar a listagem principal da Despensa.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "15"
+      ],
+      "acceptanceCriteria": [
+        "Itens agrupados por categoria, ordenados por ordem de inserção dentro do grupo (RN-02.2)",
+        "Botão '−' em quantidade 1 remove o item da lista (RN-02.1)",
+        "Botão ✕ remove o item imediatamente, sem confirmação"
+      ],
+      "relatedRequirements": [
+        "RN-02.1",
+        "RN-02.2"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "17",
+      "phase": "fase-3",
+      "title": "CTA 'Ir para o Carrinho'",
+      "description": "Implementar a transição da Despensa para o Carrinho.",
+      "status": "done",
+      "priority": "high",
+      "dependsOn": [
+        "16",
+        "9"
+      ],
+      "acceptanceCriteria": [
+        "Ao tocar, cria/retoma Compra e navega para 2b",
+        "Itens da Despensa não são removidos nesse momento (RN-02.3)"
+      ],
+      "relatedRequirements": [
+        "UC-02",
+        "RN-02.3",
+        "RN-02.4"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "18",
+      "phase": "fase-4",
+      "title": "Toggle Despensa/Carrinho + geolocalização real (captura GPS ao abrir)",
+      "description": "Implementar o toggle de navegação entre modos e a captura real de GPS ao abrir o Carrinho.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "17"
+      ],
+      "acceptanceCriteria": [
+        "Toggle só fica habilitado quando existe Compra em andamento (RN-04.1)",
+        "Alternar entre modos não altera o estado de nenhum item (RN-04.2)",
+        "GPS é solicitado/capturado ao abrir a tela do Carrinho"
+      ],
+      "relatedRequirements": [
+        "UC-04",
+        "RN-04.1",
+        "RN-04.2"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "19",
+      "phase": "fase-4",
+      "title": "Reverse geocoding do GPS → nome/endereço do supermercado (via Nominatim)",
+      "description": "Usar a camada de geocoding para identificar o supermercado a partir das coordenadas.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "18",
+        "11a"
+      ],
+      "acceptanceCriteria": [
+        "Badge exibe supermercado detectado com opção de trocar manualmente (RN-03.5)",
+        "Se GPS indisponível/negado, seleção manual de supermercado funciona como fallback obrigatório sem travar o fluxo (RN-03.6)"
+      ],
+      "relatedRequirements": [
+        "UC-03",
+        "RN-03.5",
+        "RN-03.6"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "20",
+      "phase": "fase-4",
+      "title": "Input de item extra + botão de scan",
+      "description": "Implementar a adição de itens não planejados durante a compra.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "19"
+      ],
+      "acceptanceCriteria": [
+        "Item extra criado com origem=extra, não comprado, sem preço",
+        "Botão de scan disponível diretamente no fluxo de adicionar item extra"
+      ],
+      "relatedRequirements": [
+        "UC-03"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "21",
+      "phase": "fase-4",
+      "title": "Barra de progresso dinâmica",
+      "description": "Implementar a barra de progresso do Carrinho.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "20"
+      ],
+      "acceptanceCriteria": [
+        "Progresso considera todos os itens (planejados + extras), comprados ou não (RN-03.3)",
+        "Atualiza em tempo real ao marcar/desmarcar itens"
+      ],
+      "relatedRequirements": [
+        "RN-03.3"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "22",
+      "phase": "fase-4",
+      "title": "Lista de itens com check, badge planejado/extra, preço, qtd",
+      "description": "Implementar a listagem principal do Carrinho.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "21"
+      ],
+      "acceptanceCriteria": [
+        "Badges 🏠 (planejado) e ⚡ (extra) exibidos corretamente",
+        "Marcar item sem preço definido bloqueia e oferece 'escanear código' ou 'digitar preço' (RN-03.1)",
+        "Desmarcar item mantém o preço salvo, item volta a não comprado",
+        "Itens sem código de barras exibem 'sem código escaneado'; com código, exibem o código (RN-03.4)"
+      ],
+      "relatedRequirements": [
+        "UC-03",
+        "RN-03.1",
+        "RN-03.4"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "23",
+      "phase": "fase-4",
+      "title": "Scanner de código de barras real (câmera) → busca produto por código na API",
+      "description": "Implementar leitura de código de barras via BarcodeDetector com fallback @zxing/browser.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "22"
+      ],
+      "acceptanceCriteria": [
+        "BarcodeDetector usado quando disponível no navegador, com fallback automático para @zxing/browser",
+        "Produto correspondente ao código é localizado via API",
+        "Preço sugerido = último PrecoHistorico do produto naquele supermercado; se não existir, último preço em qualquer mercado; se nenhum existir, campo em branco (RN-03.7)",
+        "Preço sugerido é editável antes de confirmar"
+      ],
+      "relatedRequirements": [
+        "UC-03",
+        "RN-03.7"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "24",
+      "phase": "fase-4",
+      "title": "Fallback 'digitar preço' manual",
+      "description": "Implementar entrada manual de preço quando o scan não é usado.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "22"
+      ],
+      "acceptanceCriteria": [
+        "Input numérico válido (> 0) obrigatório para marcar item como comprado",
+        "Disponível como alternativa ao scan em qualquer item"
+      ],
+      "relatedRequirements": [
+        "RN-03.1"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "25",
+      "phase": "fase-4",
+      "title": "Barra inferior fixa: total parcial + finalizar",
+      "description": "Implementar o rodapé fixo do Carrinho com subtotal e CTA de finalizar.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "23",
+        "24"
+      ],
+      "acceptanceCriteria": [
+        "Subtotal soma apenas itens marcados como comprados (RN-03.2)",
+        "Botão 'Finalizar Compra' navega para a tela 2c"
+      ],
+      "relatedRequirements": [
+        "RN-03.2"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "26",
+      "phase": "fase-5",
+      "title": "Tela de confirmação com data/hora real + geoloc capturada",
+      "description": "Implementar o cabeçalho da tela Finalizar Compra (2c).",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "25"
+      ],
+      "acceptanceCriteria": [
+        "Exibe data/hora real de finalização e o supermercado da compra"
+      ],
+      "relatedRequirements": [
+        "UC-05"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "27",
+      "phase": "fase-5",
+      "title": "Resumo financeiro (total, X/Y itens)",
+      "description": "Implementar o resumo numérico da compra finalizada.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "26"
+      ],
+      "acceptanceCriteria": [
+        "Total gasto = soma dos ItemCompra comprados",
+        "Contagem 'X/Y itens comprados' exibida corretamente"
+      ],
+      "relatedRequirements": [
+        "UC-05"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "28",
+      "phase": "fase-5",
+      "title": "Três blocos (comprados / extras / pendentes) vindos da sessão",
+      "description": "Implementar a classificação visual dos itens da compra finalizada.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "27"
+      ],
+      "acceptanceCriteria": [
+        "Bloco 'Comprados — saem da despensa': origem=planejado e comprado=true",
+        "Bloco 'Não planejados — comprados na hora': origem=extra e comprado=true",
+        "Bloco 'Não comprados — ficam na lista': comprado=false independente da origem"
+      ],
+      "relatedRequirements": [
+        "UC-05"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "29",
+      "phase": "fase-5",
+      "title": "Persistência: grava Compra + PrecoHistorico no backend",
+      "description": "Conectar a tela de finalização ao endpoint transacional de finalizar compra (task 9).",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "28",
+        "9"
+      ],
+      "acceptanceCriteria": [
+        "Itens comprados planejados removem o ItemDespensa correspondente e geram PrecoHistorico",
+        "Itens extra comprados geram PrecoHistorico sem criar ItemDespensa",
+        "Itens não comprados mantêm/recriam o ItemDespensa, sem registrar preço",
+        "Item extra não comprado é descartado silenciosamente, sem gerar ItemDespensa (RN-05.1)",
+        "Operação é atômica — falha parcial não deixa dado duplicado nem inconsistente (RN-05.3)",
+        "Compra marcada como finalizada fica somente leitura (RN-05.4)"
+      ],
+      "relatedRequirements": [
+        "UC-05",
+        "RN-05.1",
+        "RN-05.2",
+        "RN-05.3",
+        "RN-05.4"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "30",
+      "phase": "fase-5",
+      "title": "CTAs: Ver Despensa / Nova Compra",
+      "description": "Implementar as ações finais da tela 2c.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "29"
+      ],
+      "acceptanceCriteria": [
+        "'Ver Despensa' volta para a tela 2a",
+        "'Nova Compra' só é permitido se não houver outra Compra em andamento (RN-05.5)"
+      ],
+      "relatedRequirements": [
+        "RN-05.5"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "31",
+      "phase": "fase-6",
+      "title": "Filtro de período (mês/3m/6m) consultando API",
+      "description": "Implementar o seletor de período do Analítico.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "11"
+      ],
+      "acceptanceCriteria": [
+        "Trocar o período recarrega os dados via API (UC-06 fluxo 1-2)",
+        "Padrão é 'Este mês'"
+      ],
+      "relatedRequirements": [
+        "UC-06"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "32",
+      "phase": "fase-6",
+      "title": "Cards de resumo financeiro",
+      "description": "Implementar os cards de total gasto, variação e nº de compras no período.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "31"
+      ],
+      "acceptanceCriteria": [
+        "Variação % vs. período anterior equivalente calculada corretamente (RN-06.1)"
+      ],
+      "relatedRequirements": [
+        "RN-06.1"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "33",
+      "phase": "fase-6",
+      "title": "Alertas de variação de preço (lógica de comparação no backend)",
+      "description": "Exibir alertas de alta de preço e de ausência de compra vindos da API.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "32"
+      ],
+      "acceptanceCriteria": [
+        "Alerta de alta exibe produto, % de alta e média histórica → preço atual (RN-06.2)",
+        "Alerta de ausência exibe produtos sem compra há mais do que o limiar configurado (RN-06.3)",
+        "Limiares não estão hardcoded no frontend"
+      ],
+      "relatedRequirements": [
+        "RN-06.2",
+        "RN-06.3"
+      ],
+      "notes": "Limiares (18%, 6 semanas) são placeholders; calibração futura com dados reais de uso."
+    },
+    {
+      "id": "34",
+      "phase": "fase-6",
+      "title": "Gráfico de gasto por categoria (barras clicáveis)",
+      "description": "Implementar o gráfico principal do dashboard Analítico.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "33"
+      ],
+      "acceptanceCriteria": [
+        "Barras proporcionais ao maior valor, com valor em R$",
+        "Soma apenas ItemCompra de compras finalizadas dentro do período (RN-06.4)",
+        "Compras em andamento nunca entram no cálculo (RN-06.5)"
+      ],
+      "relatedRequirements": [
+        "RN-06.4",
+        "RN-06.5"
+      ],
+      "notes": "Clique em categoria navega para listagem filtrada — tela ainda não detalhada no wireframe (pendência de design futura)."
+    },
+    {
+      "id": "35",
+      "phase": "fase-6",
+      "title": "Navegação para 3b/3c",
+      "description": "Implementar os atalhos do Analítico para Histórico por produto e Comparativo de supermercados.",
+      "status": "todo",
+      "priority": "low",
+      "dependsOn": [
+        "34"
+      ],
+      "acceptanceCriteria": [
+        "Links de atalho navegam corretamente para 3b e 3c"
+      ],
+      "relatedRequirements": [
+        "UC-06"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "36",
+      "phase": "fase-7",
+      "title": "Header do produto + preço atual/menor/média",
+      "description": "Implementar o cabeçalho da tela de histórico por produto (3b).",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "10"
+      ],
+      "acceptanceCriteria": [
+        "'Último preço' = PrecoHistorico mais recente do produto em qualquer supermercado (RN-07.1)",
+        "Menor preço e preço médio do período calculados corretamente"
+      ],
+      "relatedRequirements": [
+        "UC-07",
+        "RN-07.1"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "37",
+      "phase": "fase-7",
+      "title": "Gráfico de variação mensal (dados reais do backend)",
+      "description": "Implementar o gráfico de barras mensal de preço médio.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "36"
+      ],
+      "acceptanceCriteria": [
+        "Gráfico usa preço médio de todas as ocorrências do produto naquele mês (RN-07.2)",
+        "Produto com menos de 2 registros de PrecoHistorico ainda exibe o gráfico com os dados parciais, acompanhado de badge de aviso de amostra pequena (RN-07.4)"
+      ],
+      "relatedRequirements": [
+        "RN-07.2",
+        "RN-07.4"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "38",
+      "phase": "fase-7",
+      "title": "Ranking de preço por supermercado",
+      "description": "Implementar o ranking de mercados por preço médio do produto.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "37"
+      ],
+      "acceptanceCriteria": [
+        "Ranking usa média histórica de preço por mercado, não o último preço pontual (RN-07.3)",
+        "🏆 exibido no supermercado mais barato"
+      ],
+      "relatedRequirements": [
+        "RN-07.3"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "39",
+      "phase": "fase-8",
+      "title": "Cards-resumo por mercado",
+      "description": "Implementar os cards de resumo da tela Comparativo de Supermercados (3c).",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "10"
+      ],
+      "acceptanceCriteria": [
+        "Cada card mostra 'média menor em N itens' — contagem de produtos em que aquele mercado tem o menor preço médio",
+        "Valor recalculado a cada abertura da tela, sem cache sem invalidação (RN-08.2)",
+        "Aviso de que os dados são baseados em histórico, não preço em tempo real"
+      ],
+      "relatedRequirements": [
+        "UC-08",
+        "RN-08.2"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "40",
+      "phase": "fase-8",
+      "title": "Tabela comparativa por produto com melhor preço destacado",
+      "description": "Implementar a tabela produto × supermercado com preço médio histórico.",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "39"
+      ],
+      "acceptanceCriteria": [
+        "Linhas = produtos, colunas = supermercados, célula = preço médio histórico",
+        "Menor valor da linha destacado com 🏆; empates destacam ambos os mercados (RN-08.3)",
+        "Produtos presentes em apenas 1 supermercado ainda aparecem na tabela, com badge de aviso de amostra insuficiente, em vez de serem ocultados (RN-08.1)"
+      ],
+      "relatedRequirements": [
+        "RN-08.1",
+        "RN-08.3"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "41",
+      "phase": "fase-9",
+      "title": "Roteamento completo entre as 7 telas",
+      "description": "Garantir que a navegação entre Home, Despensa, Carrinho, Finalizar Compra, Analítico, Histórico por produto e Comparativo está completa e consistente.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "14",
+        "17",
+        "25",
+        "30",
+        "35",
+        "38",
+        "40"
+      ],
+      "acceptanceCriteria": [
+        "Todas as 7 telas são navegáveis a partir dos pontos de entrada previstos no wireframe",
+        "Nenhuma rota órfã ou callback de navegação quebrado"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "42",
+      "phase": "fase-9",
+      "title": "Tratamento de erros (permissão de câmera negada, GPS indisponível, offline)",
+      "description": "Implementar estados de erro e fallback para as integrações reais (câmera, GPS, rede).",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "41"
+      ],
+      "acceptanceCriteria": [
+        "Permissão de câmera negada não bloqueia o fluxo — oferece fallback de digitar preço/código manualmente",
+        "GPS indisponível/negado permite seleção manual de supermercado sem travar (RN-03.6)",
+        "Estado offline exibe feedback claro ao usuário sem quebrar a aplicação"
+      ],
+      "relatedRequirements": [
+        "RN-03.6"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "43",
+      "phase": "fase-9",
+      "title": "Revisão pixel-a-pixel comparada ao wireframe",
+      "description": "Comparar cada uma das 7 telas implementadas com o wireframe original (Lista de Compras - Wireframes.dc.html).",
+      "status": "todo",
+      "priority": "medium",
+      "dependsOn": [
+        "42"
+      ],
+      "acceptanceCriteria": [
+        "Cada tela revisada lado a lado com o wireframe correspondente",
+        "Discrepâncias visuais relevantes corrigidas ou documentadas como decisão consciente"
+      ],
+      "relatedRequirements": [],
+      "notes": ""
+    },
+    {
+      "id": "44",
+      "phase": "fase-9",
+      "title": "Testes básicos dos endpoints principais",
+      "description": "Cobrir com testes automatizados os fluxos de backend mais críticos do produto.",
+      "status": "todo",
+      "priority": "high",
+      "dependsOn": [
+        "9",
+        "11"
+      ],
+      "acceptanceCriteria": [
+        "Teste: criar Compra com uma já em andamento retoma a existente (RN-02.4)",
+        "Teste: marcar item como comprado sem preço é rejeitado (RN-03.1)",
+        "Teste: finalizar compra é transacional e idempotente em caso de reprocessamento (RN-05.3)",
+        "Teste: adicionar item existente na Despensa soma quantidade em vez de duplicar (regras-de-negocio.md#4.1)",
+        "Teste: analítico exclui compras em andamento dos cálculos (RN-06.5)"
+      ],
+      "relatedRequirements": [
+        "RN-02.4",
+        "RN-03.1",
+        "RN-05.3",
+        "RN-06.5",
+        "regras-de-negocio.md#4.1-despensa"
+      ],
+      "notes": ""
+    }
+  ]
+}

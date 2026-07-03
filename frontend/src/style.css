@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+/*
+ * Design tokens do Mercadeiro (mercadeiro-tasks.json #5).
+ * Estética "sketchy": bordas grossas, sombra sólida deslocada (sem blur),
+ * títulos em Caveat (manuscrito), texto/dados em Space Mono.
+ */
+@theme {
+  --font-display: "Caveat", cursive;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+  --font-sans: "Space Mono", ui-monospace, monospace;
+
+  --color-bg: #fdf8f0;
+  --color-surface: #ffffff;
+  --color-ink: #1f1c19;
+  --color-muted: #746e64;
+  --color-border: #1f1c19;
+
+  --color-primary: #ff7a45;
+  --color-primary-content: #1f1c19;
+  --color-secondary: #4d8b7c;
+  --color-secondary-content: #ffffff;
+  --color-accent: #ffd23f;
+  --color-accent-content: #1f1c19;
+
+  --color-success: #4d8b7c;
+  --color-warning: #ffb020;
+  --color-danger: #e0554f;
+
+  --shadow-sketchy: 3px 3px 0 0 var(--color-ink);
+  --shadow-sketchy-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-sketchy-lg: 5px 5px 0 0 var(--color-ink);
+
+  --radius-sketchy: 0.85rem;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
