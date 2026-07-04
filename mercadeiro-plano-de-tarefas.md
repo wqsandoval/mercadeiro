@@ -39,14 +39,14 @@ Baseado no wireframe `Lista de Compras - Wireframes.dc.html` (7 telas reais: 3a,
 
 ## Fase 4 — Carrinho (2b)
 
-- [ ] 18. Toggle Despensa/Carrinho + geolocalização real (captura GPS ao abrir)
-- [ ] 19. Reverse geocoding do GPS → nome/endereço do supermercado (via Nominatim)
-- [ ] 20. Input de item extra + botão de scan
-- [ ] 21. Barra de progresso dinâmica
-- [ ] 22. Lista de itens com check, badge planejado/extra, preço, qtd
-- [ ] 23. Scanner de código de barras real (câmera) → busca produto por código na API
-- [ ] 24. Fallback "digitar preço" manual
-- [ ] 25. Barra inferior fixa: total parcial + finalizar
+- [x] 18. Toggle Despensa/Carrinho + geolocalização real (captura GPS ao abrir)
+- [x] 19. Reverse geocoding do GPS → nome/endereço do supermercado (via Nominatim)
+- [x] 20. Input de item extra + botão de scan
+- [x] 21. Barra de progresso dinâmica
+- [x] 22. Lista de itens com check, badge planejado/extra, preço, qtd
+- [x] 23. Scanner de código de barras real (câmera) → busca produto por código na API
+- [x] 24. Fallback "digitar preço" manual
+- [x] 25. Barra inferior fixa: total parcial + finalizar
 
 ## Fase 5 — Finalizar Compra (2c)
 
@@ -100,3 +100,14 @@ Baseado no wireframe `Lista de Compras - Wireframes.dc.html` (7 telas reais: 3a,
 - Auth da API: bearer token único (app single-user), configurado em `API_BEARER_TOKEN` no `.env` do backend (decisão 2026-07-02). No frontend, o token **não** é embutido no build (evita expor em bundle público) — é colado manualmente numa tela de login e guardado em `localStorage` (`frontend/src/stores/auth.ts`); todas as rotas exigem sessão exceto `/login`
 - Layout do frontend (decisão 2026-07-03): removida a simulação de celular do wireframe (`StatusBar` com relógio/sinal/bateria falsos + `PhoneShell` com dimensões fixas de iPhone). Substituído por `AppShell`, um container genuinamente responsivo (Tailwind breakpoints) — full-bleed no mobile, painel centralizado no desktop, sem simular hardware
   - Single-user por enquanto (sem conta compartilhada/família)
+- Wireframe oficial localizado em `wireframes/app-web-de-lista-de-compras/project/Lista de Compras - Wireframes.dc.html` (adicionado ao repo em 2026-07-03, antes só era citado por nome)
+- Carrinho (Fase 4, decisão 2026-07-03), conferido contra o wireframe real (tela `#2b`):
+  - "Bloquear e oferecer método" (RN-03.1) é implementado como dois botões inline sempre visíveis ("📷 Escanear código" / "💲 digitar preço") abaixo de qualquer item não comprado — sem modal intermediário de "escolher método". Checkbox vazio abre o mesmo editor de preço inline
+  - Item com preço já salvo (desmarcado antes) remarca comprado=true direto ao reclicar o checkbox, sem reabrir o editor — preço existente já satisfaz RN-03.1
+  - Estado da Compra (itens, supermercado, subtotal, progresso) vive no Pinia store (`stores/compra.ts`), não local na view — a Fase 5 (tela 2c) precisa ler a mesma Compra em outra rota
+  - `compraStore.carregarCompraAtual()` passou a ser chamado no mount de Despensa e Carrinho (antes só era populado após clicar em algum CTA), corrigindo o toggle Despensa/Carrinho ficando incorretamente desabilitado em reload/deep-link
+  - Reverse geocoding é feito via `GET /geocoding/reverse` do próprio backend, nunca direto do browser ao Nominatim
+  - Scanner de código de barras: `BarcodeDetector` nativo e `@zxing/browser` (import dinâmico) rodam em paralelo — quem detectar primeiro vence — em vez de um-ou-outro, porque `window.BarcodeDetector` pode existir em Chrome desktop sem o backend de detecção funcionar de fato (falha silenciosa, observado em Windows). Zxing configurado com hints restritos aos 5 formatos 1D relevantes (EAN-13/EAN-8/UPC-A/UPC-E/CODE-128) + `TRY_HARDER`. Além da detecção contínua, `ScannerModal` tem um botão "📸 Capturar" (fallback temporário) que congela o frame atual e tenta decodificar uma única vez, sem a pressão de tempo do loop contínuo — implementado como caminho adicional, não substitui a detecção em tempo real, para poder retomar/ajustar cada um independentemente depois. Campo de código digitado manualmente continua como último fallback e como seam determinística dos testes E2E (decodificação real de imagem não é simulável em Playwright headless)
+  - **Pendência de validação pós-deploy**: testado exaustivamente em webcam de notebook (detecção contínua e captura estática) com múltiplos produtos físicos reais — todos falharam. Investigação descartou bug de formato/código (os códigos testados são EAN-13 válidos, checksum confere, mesmo formato de uma imagem de tela que funcionou) e confirmou visualmente, a partir de fotos, que a causa é qualidade de captura da webcam (desfoque de foco/movimento, reflexo de luz sobre o código, curvatura de embalagem cilíndrica) — não uma limitação do decodificador nem da implementação. Nenhum ajuste de software adicional é esperado para resolver isso nesse hardware específico. **Validação decisiva pendente: testar no smartphone real (autofoco de verdade) após o deploy.** Uso funcional no meio-tempo garantido pelo campo de código manual
+  - Adiado para a Fase 7 (tela 3b ainda não existe): navegação "📈 ›" ao histórico do produto e a barra de legenda "toque no produto → histórico"
+  - Tela Finalizar Compra (2c) ainda não implementada (Fase 5) — criado stub `FinalizarCompraView.vue` + rota `/carrinho/finalizar`, mesmo padrão usado por `CarrinhoView.vue` como stub nas Fases 2-3, para o botão "Finalizar Compra" ter destino real e testável

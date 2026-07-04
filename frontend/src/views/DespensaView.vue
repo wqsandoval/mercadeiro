@@ -6,6 +6,7 @@ import Card from "../components/base/Card.vue";
 import CategoryHeader from "../components/base/CategoryHeader.vue";
 import QtyStepper from "../components/base/QtyStepper.vue";
 import Button from "../components/base/Button.vue";
+import ModoToggle from "../components/ModoToggle.vue";
 import { useCompraStore } from "../stores/compra";
 import {
   adicionarItemDespensa,
@@ -115,7 +116,12 @@ async function irParaCarrinho() {
   }
 }
 
-onMounted(carregar);
+onMounted(() => {
+  carregar();
+  // Garante que o toggle (RN-04.1) reflita o estado real do backend mesmo em
+  // reload/deep-link direto para /despensa, não só após clicar em algum CTA.
+  compraStore.carregarCompraAtual();
+});
 </script>
 
 <template>
@@ -133,7 +139,10 @@ onMounted(carregar);
 
     <header class="mb-4 flex items-center justify-between">
       <h1 class="font-display text-4xl">Despensa</h1>
-      <RouterLink to="/" class="text-sm text-muted underline">← Home</RouterLink>
+      <div class="flex items-center gap-3">
+        <ModoToggle />
+        <RouterLink to="/" class="text-sm text-muted underline">← Home</RouterLink>
+      </div>
     </header>
 
     <form class="mb-4" @submit.prevent="adicionarItem">

@@ -73,7 +73,7 @@ export default defineConfig({
     {
       name: "ui-app",
       testDir: "./ui",
-      testMatch: /(home|despensa)\.spec\.ts/,
+      testMatch: /(home|despensa|carrinho)\.spec\.ts/,
       use: { baseURL: frontendURL, ...devices["Desktop Chrome"], storageState: authFile },
       dependencies: ["ui-setup"],
     },

@@ -467,7 +467,7 @@
       "phase": "fase-4",
       "title": "Toggle Despensa/Carrinho + geolocalização real (captura GPS ao abrir)",
       "description": "Implementar o toggle de navegação entre modos e a captura real de GPS ao abrir o Carrinho.",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "dependsOn": [
         "17"
@@ -482,14 +482,14 @@
         "RN-04.1",
         "RN-04.2"
       ],
-      "notes": ""
+      "notes": "Componente compartilhado ModoToggle.vue (frontend/src/components) usado por Despensa e Carrinho. compraStore.carregarCompraAtual() passou a ser chamado no onMounted de ambas as views (antes só era populado após clicar em algum CTA) — corrige o toggle ficando incorretamente desabilitado num reload/deep-link direto."
     },
     {
       "id": "19",
       "phase": "fase-4",
       "title": "Reverse geocoding do GPS → nome/endereço do supermercado (via Nominatim)",
       "description": "Usar a camada de geocoding para identificar o supermercado a partir das coordenadas.",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "dependsOn": [
         "18",
@@ -504,14 +504,14 @@
         "RN-03.5",
         "RN-03.6"
       ],
-      "notes": ""
+      "notes": "SupermercadoBadge.vue chama GET /geocoding/reverse do próprio backend (não Nominatim direto do browser). Auto-seleciona a sugestão via POST /supermercados (dedupe) só quando a Compra ainda não tem supermercadoId, para não sobrescrever escolha manual. Fallback manual (RN-03.6): lista supermercados existentes + formulário '+ novo'."
     },
     {
       "id": "20",
       "phase": "fase-4",
       "title": "Input de item extra + botão de scan",
       "description": "Implementar a adição de itens não planejados durante a compra.",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "dependsOn": [
         "19"
@@ -523,14 +523,14 @@
       "relatedRequirements": [
         "UC-03"
       ],
-      "notes": ""
+      "notes": "Botão de scan compartilha o ScannerModal com o de cada item da lista (contexto 'extra' vs 'item'); código conhecido cria/reaproveita o SKU direto (POST /produtos-sku por código de barras), código desconhecido pede nome/marca antes de criar."
     },
     {
       "id": "21",
       "phase": "fase-4",
       "title": "Barra de progresso dinâmica",
       "description": "Implementar a barra de progresso do Carrinho.",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "dependsOn": [
         "20"
@@ -542,14 +542,14 @@
       "relatedRequirements": [
         "RN-03.3"
       ],
-      "notes": ""
+      "notes": "Getter compraStore.progresso ({atual, total}) reaproveita o componente ProgressBar já existente (Fase 0), sem alteração nele."
     },
     {
       "id": "22",
       "phase": "fase-4",
       "title": "Lista de itens com check, badge planejado/extra, preço, qtd",
       "description": "Implementar a listagem principal do Carrinho.",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "dependsOn": [
         "21"
@@ -565,14 +565,14 @@
         "RN-03.1",
         "RN-03.4"
       ],
-      "notes": ""
+      "notes": "Decisão 2026-07-03: conferido o wireframe real (wireframes/app-web-de-lista-de-compras/project/Lista de Compras - Wireframes.dc.html, tela #2b) — 'bloquear e oferecer' é implementado como os dois botões '📷 Escanear código'/'💲 digitar preço' sempre visíveis inline abaixo de qualquer item não comprado (sem modal intermediário de 'escolher método'). Clicar no checkbox vazio abre o mesmo editor de preço inline. Refinamento: se o item já tem preço salvo (desmarcado antes), reclicar o checkbox remarca comprado=true direto, sem reabrir o editor (RN-03.1 já satisfeita pelo preço existente). Fora de escopo desta fase, adiado para a Fase 7: o '📈 ›' de navegação ao histórico do produto e a barra de legenda 'toque no produto → histórico' (tela 3b ainda não existe)."
     },
     {
       "id": "23",
       "phase": "fase-4",
       "title": "Scanner de código de barras real (câmera) → busca produto por código na API",
       "description": "Implementar leitura de código de barras via BarcodeDetector com fallback @zxing/browser.",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "dependsOn": [
         "22"
@@ -587,14 +587,14 @@
         "UC-03",
         "RN-03.7"
       ],
-      "notes": ""
+      "notes": "useBarcodeScanner.ts roda BarcodeDetector nativo (quando presente) e @zxing/browser (import dinâmico, chunk isolado ~468kB) em PARALELO, não um-ou-outro — quem detectar primeiro vence (flag `detectado` evita reportar duas vezes). Ajuste 2026-07-03 pós-teste manual: a checagem original só testava se `window.BarcodeDetector` existia; em Chrome desktop (observado em Windows) a API existe mas o backend de detecção nunca detecta nada sem lançar erro, então o fallback nunca era alcançado. Rodar os dois sempre garante uma tentativa real via decodificação 100% em JS (zxing), independente da instalação do navegador. Teste manual também revelou que webcam de notebook (foco fixo, resolução baixa) não é um ambiente representativo do celular (alvo real do app) para validar a detecção — a confirmação definitiva de que o scanner funciona depende de testar num smartphone de verdade. Testabilidade automatizada: decodificação real de imagem de código de barras não é simulável em Playwright headless (fake video device do Chromium gera padrão sintético, não uma imagem real) — ScannerModal.vue expõe um campo de código digitado manualmente (data-testid=scanner-codigo-manual) que é ao mesmo tempo fallback de UX legítimo (código danificado/ilegível) e a seam usada pelo teste E2E. Ajuste adicional 2026-07-03 (segunda rodada, ainda sem detecção na webcam do notebook com produtos físicos reais): getUserMedia passou a pedir resolução alta explicitamente (1920x1080 ideal — sem isso muitas webcams negociam algo baixo tipo 640x480, insuficiente pra resolver as barras finas de um EAN-13); zxing ganhou hints DecodeHintType.POSSIBLE_FORMATS (restrito aos 5 formatos 1D relevantes, em vez do default que tenta tudo incluindo QR/PDF417/Datamatrix) e TRY_HARDER; delayBetweenScanAttempts reduzido de 500ms para 150ms (mais tentativas por segundo). @zxing/library adicionada como dependência explícita do frontend (antes só vinha transitiva via @zxing/browser). Deploy no smartphone (ambiente-alvo real, com autofoco de verdade) ainda é a validação decisiva pendente — o notebook usado nos testes até agora pode ter foco fixo incapaz de focar a poucos centímetros, o que nenhum ajuste de software resolve. Fallback temporário 2026-07-03 (terceira rodada, detecção contínua seguiu falhando na webcam com múltiplos produtos físicos reais, só validável de fato num smartphone após o deploy): botão '📸 Capturar' no ScannerModal.vue, chamando a nova função capturarFrame() do composable — desenha o frame atual num canvas (parado, sem o ruído do vídeo em movimento) e tenta decodificar uma vez só (BarcodeDetector nativo, senão zxing com os mesmos hints TRY_HARDER via decodeFromCanvas), dando tempo pro usuário mirar/focar antes de disparar. Roda em paralelo à detecção contínua (iniciar()), sem substituí-la nem pausá-la — estrutura mantida intacta de propósito para retomar/ajustar o modo tempo-real depois sem mexer no fallback, e vice-versa. Sem resultado na foto não é erro, só mostra aviso pra tentar de novo (data-testid=scanner-sem-resultado). Conclusão 2026-07-03 (investigação encerrada, causa raiz confirmada): suspeita de que a falha fosse por formato de código foi checada e descartada — os três códigos de produtos reais testados (7898215152002, 7896423419276, 4005900704337) são EAN-13 válidos (checksum confere), mesmo formato da imagem de tela que funcionou (0789123456789 mostrada num celular). Fotos enviadas pelo usuário mostram a causa real diretamente: desfoque de movimento/foco nas barras, faixa de reflexo de luz cortando o código, e um dos produtos com rótulo em superfície cilíndrica curva (distorce a largura das barras). É qualidade de captura da webcam do notebook (foco fixo, sem controle de exposição pra reflexo), não bug de decodificação, formato ou da implementação — confirmado com evidência visual direta, não mais suspeita. Nenhum ajuste de software adicional é esperado para resolver isso nesse hardware; validação decisiva fica para o teste no smartphone (autofoco real) após o deploy. Uso real no meio-tempo: campo de código manual (scanner-codigo-manual)."
     },
     {
       "id": "24",
       "phase": "fase-4",
       "title": "Fallback 'digitar preço' manual",
       "description": "Implementar entrada manual de preço quando o scan não é usado.",
-      "status": "todo",
+      "status": "done",
       "priority": "medium",
       "dependsOn": [
         "22"
@@ -606,14 +606,14 @@
       "relatedRequirements": [
         "RN-03.1"
       ],
-      "notes": ""
+      "notes": "Editor de preço inline dentro de ItemCarrinhoCard.vue (input + confirmar/cancelar), não um modal separado — reaproveitado tanto pelo caminho manual quanto pelo prefill de preço sugerido após um scan (RN-03.7)."
     },
     {
       "id": "25",
       "phase": "fase-4",
       "title": "Barra inferior fixa: total parcial + finalizar",
       "description": "Implementar o rodapé fixo do Carrinho com subtotal e CTA de finalizar.",
-      "status": "todo",
+      "status": "done",
       "priority": "high",
       "dependsOn": [
         "23",
@@ -626,7 +626,7 @@
       "relatedRequirements": [
         "RN-03.2"
       ],
-      "notes": ""
+      "notes": "Tela 2c ainda não existe (Fase 5) — criada rota/stub finalizar-compra (FinalizarCompraView.vue) seguindo o mesmo padrão que CarrinhoView.vue usou como stub nas Fases 2-3, só para o botão ter um destino real e testável."
     },
     {
       "id": "26",

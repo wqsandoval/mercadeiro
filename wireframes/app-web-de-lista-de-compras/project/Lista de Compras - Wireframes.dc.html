@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #f0ece4; font-family: 'Caveat', cursive; }
+
+    .dv-turn { padding: 40px 44px 32px; border-bottom: 1px solid rgba(0,0,0,.1); scroll-margin-top: 16px; }
+    .dv-thd { display: flex; align-items: baseline; gap: 10px; margin: 0 0 20px; }
+    .dv-tid { font: 700 10px 'Space Mono', monospace; padding: 3px 7px; background: #1a1a1a; color: #fff; border-radius: 4px; text-decoration: none; }
+    .dv-tname { font: 700 15px 'Space Mono', monospace; color: #1a1a1a; }
+    .dv-opts { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+    .dv-opt { flex: none; display: flex; flex-direction: column; gap: 9px; scroll-margin-top: 16px; }
+    .dv-oid { font: 700 10px 'Space Mono', monospace; padding: 3px 7px; background: rgba(0,0,0,.08); color: #1a1a1a; border-radius: 5px; text-decoration: none; }
+    .dv-olabel { display: flex; align-items: baseline; gap: 8px; font: 400 13px 'Caveat', cursive; color: rgba(0,0,0,.55); }
+    .dv-card { max-width: 100%; background: #fff; border: 2px solid #1a1a1a; border-radius: 12px; box-shadow: 4px 4px 0 #1a1a1a; overflow: hidden; }
+    .dv-opt:target .dv-oid { background: #ff5c3a; color: #fff; }
+    .dv-next { margin: 28px 0 0; font: 400 14px 'Caveat', cursive; color: rgba(0,0,0,.5); line-height: 1.6; }
+    .dv-next a { color: #ff5c3a; }
+
+    /* Phone frame base */
+    .phone { width: 360px; background: #fafaf8; }
+
+    /* Sketchy helpers */
+    .sk-bar { height: 2px; background: rgba(0,0,0,.1); border-radius: 2px; }
+    .sk-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1.5px solid #eee; }
+    .sk-circle { border-radius: 50%; flex-shrink: 0; }
+    .sk-rect { border-radius: 4px; flex-shrink: 0; }
+    .sk-chip { border-radius: 20px; padding: 4px 12px; font: 600 13px 'Caveat', cursive; display: inline-flex; align-items: center; }
+    .sk-label { font: 400 14px 'Caveat', cursive; color: #333; }
+    .sk-muted { font: 400 12px 'Caveat', cursive; color: #aaa; }
+    .sk-cat-head { font: 700 13px 'Space Mono', monospace; color: #666; padding: 10px 16px 4px; letter-spacing: .04em; text-transform: uppercase; font-size: 10px; background: #f5f3ef; }
+    .sk-price { font: 600 13px 'Caveat', cursive; color: #555; margin-left: auto; }
+    .sk-qty { display: flex; align-items: center; gap: 6px; border: 1.5px solid #ddd; border-radius: 8px; padding: 2px 8px; font: 600 13px 'Caveat', cursive; color: #444; }
+    .sk-qty span { color: #bbb; font-size: 11px; }
+    .sk-fab { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; border: 2.5px solid #1a1a1a; box-shadow: 3px 3px 0 #1a1a1a; cursor: pointer; flex-shrink: 0; }
+    .sk-header { padding: 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a1a1a; }
+    .sk-title { font: 700 22px 'Caveat', cursive; color: #1a1a1a; }
+    .sk-status-bar { background: #1a1a1a; padding: 6px 16px; display: flex; justify-content: space-between; }
+    .sk-status-bar span { font: 400 10px 'Space Mono', monospace; color: #fff; }
+    .sk-bottom-bar { display: flex; align-items: center; justify-content: space-around; padding: 12px 16px; border-top: 2px solid #1a1a1a; background: #fff; }
+    .sk-bottom-icon { display: flex; flex-direction: column; align-items: center; gap: 3px; font: 400 10px 'Caveat', cursive; color: #888; }
+    .sk-input-area { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 2px solid #eee; background: #fafafa; }
+    .sk-input { flex: 1; border: 1.5px solid #ddd; border-radius: 8px; padding: 8px 12px; font: 400 14px 'Caveat', cursive; color: #999; background: #fff; }
+    .sk-progress { height: 6px; border-radius: 3px; background: #eee; margin: 0 16px 12px; overflow: hidden; }
+    .sk-progress-fill { height: 100%; border-radius: 3px; }
+    .sk-badge { border-radius: 20px; padding: 2px 10px; font: 600 11px 'Caveat', cursive; }
+    .sk-tab { padding: 8px 14px; font: 600 13px 'Caveat', cursive; border-bottom: 2.5px solid transparent; }
+    .sk-tab.active { border-bottom-color: #1a1a1a; color: #1a1a1a; }
+    .sk-tab { color: #999; }
+    .sk-tabs { display: flex; gap: 0; border-bottom: 1.5px solid #eee; padding: 0 8px; overflow-x: auto; }
+    .sk-total-bar { background: #1a1a1a; color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; }
+    .sk-scan-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 2px solid #1a1a1a; font: 700 13px 'Caveat', cursive; background: #fff; box-shadow: 2px 2px 0 #1a1a1a; }
+    .sk-section-toggle { display: flex; border-radius: 8px; overflow: hidden; border: 2px solid #1a1a1a; margin: 12px 16px; }
+    .sk-toggle-btn { flex: 1; text-align: center; padding: 7px; font: 600 13px 'Caveat', cursive; }
+    .sk-toggle-btn.active { background: #1a1a1a; color: #fff; }
+    .sk-toggle-btn { color: #666; background: #fff; }
+    .sk-swipe-hint { font: 400 11px 'Caveat', cursive; color: #bbb; text-align: center; padding: 4px; }
+    .sk-cat-pill { border-radius: 20px; padding: 6px 14px; font: 600 13px 'Caveat', cursive; border: 1.5px solid; display: flex; align-items: center; gap: 6px; }
+    .sk-grid-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px; }
+    .sk-cat-card { border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; border: 1.5px solid rgba(0,0,0,.08); }
+    .sk-cat-card-title { font: 700 14px 'Caveat', cursive; color: #1a1a1a; }
+    .sk-cat-card-count { font: 400 12px 'Caveat', cursive; color: #888; }
+    .sk-checked { text-decoration: line-through; color: #bbb; }
+    .sk-check { width: 20px; height: 20px; border-radius: 5px; border: 2px solid; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+    .sk-done { background: #22c55e; border-color: #22c55e; color: #fff; }
+    .sk-todo { border-color: #ccc; background: #fff; }
+  </style>
+</helmet>
+
+<!-- TURN 4 -->
+<section class="dv-turn" id="t4">
+  <div class="dv-thd">
+    <a class="dv-tid" href="#t4">4</a>
+    <span class="dv-tname">Tela dedicada — Analítico</span>
+  </div>
+  <div class="dv-opts">
+
+    <!-- 4a: Tela Analítico completa -->
+    <div class="dv-opt" id="4a">
+      <div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a> Analítico — visão completa</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+          <!-- Header -->
+          <div style="background:#1a1a1a;padding:14px 16px 12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div style="font:700 22px 'Caveat',cursive;color:#fff;">📊 Analítico</div>
+              <div style="font:400 12px 'Caveat',cursive;color:#666;">← Home</div>
+            </div>
+            <!-- Filtro de período -->
+            <div style="display:flex;gap:6px;">
+              <div style="background:#fff;border-radius:20px;padding:4px 14px;font:700 12px 'Caveat',cursive;color:#1a1a1a;">Este mês</div>
+              <div style="background:#333;border-radius:20px;padding:4px 14px;font:400 12px 'Caveat',cursive;color:#888;">3 meses</div>
+              <div style="background:#333;border-radius:20px;padding:4px 14px;font:400 12px 'Caveat',cursive;color:#888;">6 meses</div>
+            </div>
+          </div>
+
+          <!-- Resumo financeiro -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#eee;border-bottom:2px solid #1a1a1a;">
+            <div style="background:#fff;padding:10px 8px;text-align:center;">
+              <div style="font:700 18px 'Caveat',cursive;color:#1a1a1a;">R$412</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#aaa;">total gasto</div>
+            </div>
+            <div style="background:#f0fdf4;padding:10px 8px;text-align:center;">
+              <div style="font:700 18px 'Caveat',cursive;color:#22c55e;">↓ 8%</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#aaa;">vs mês ant.</div>
+            </div>
+            <div style="background:#fff;padding:10px 8px;text-align:center;">
+              <div style="font:700 18px 'Caveat',cursive;color:#1a1a1a;">4</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#aaa;">compras feitas</div>
+            </div>
+          </div>
+
+          <!-- Alertas / insights -->
+          <div style="padding:10px 16px 0;">
+            <div style="font:700 10px 'Space Mono',monospace;color:#999;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Alertas</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff7ed;border:1.5px solid #fb923c;border-radius:10px;">
+                <span style="font-size:16px;">🔥</span>
+                <div style="flex:1;">
+                  <div style="font:700 13px 'Caveat',cursive;color:#c2410c;">Frango ↑18% este mês</div>
+                  <div style="font:400 11px 'Caveat',cursive;color:#9a3412;">média histórica: R$24,80 → R$28,90</div>
+                </div>
+                <div style="font:700 11px 'Caveat',cursive;color:#3b82f6;">ver →</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fdf4ff;border:1.5px solid #c084fc;border-radius:10px;">
+                <span style="font-size:16px;">🐟</span>
+                <div style="flex:1;">
+                  <div style="font:700 13px 'Caveat',cursive;color:#7e22ce;">Peixe ausente há 6 semanas</div>
+                  <div style="font:400 11px 'Caveat',cursive;color:#7e22ce;">tendência de consumo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gasto por categoria -->
+          <div style="padding:10px 16px 0;">
+            <div style="font:700 10px 'Space Mono',monospace;color:#999;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Gasto por categoria</div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font:400 12px 'Caveat',cursive;width:68px;color:#555;flex-shrink:0;">🥩 Carnes</div>
+                <div style="flex:1;background:#eee;border-radius:4px;height:12px;overflow:hidden;cursor:pointer;">
+                  <div style="background:#ef4444;height:100%;width:72%;border-radius:4px;"></div>
+                </div>
+                <div style="font:700 12px 'Caveat',cursive;color:#555;width:44px;text-align:right;">R$142</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font:400 12px 'Caveat',cursive;width:68px;color:#555;flex-shrink:0;">🍎 Frutas</div>
+                <div style="flex:1;background:#eee;border-radius:4px;height:12px;overflow:hidden;cursor:pointer;">
+                  <div style="background:#22c55e;height:100%;width:48%;border-radius:4px;"></div>
+                </div>
+                <div style="font:700 12px 'Caveat',cursive;color:#555;width:44px;text-align:right;">R$95</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font:400 12px 'Caveat',cursive;width:68px;color:#555;flex-shrink:0;">🥛 Laticín.</div>
+                <div style="flex:1;background:#eee;border-radius:4px;height:12px;overflow:hidden;cursor:pointer;">
+                  <div style="background:#3b82f6;height:100%;width:41%;border-radius:4px;"></div>
+                </div>
+                <div style="font:700 12px 'Caveat',cursive;color:#555;width:44px;text-align:right;">R$81</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font:400 12px 'Caveat',cursive;width:68px;color:#555;flex-shrink:0;">🥖 Padaria</div>
+                <div style="flex:1;background:#eee;border-radius:4px;height:12px;overflow:hidden;cursor:pointer;">
+                  <div style="background:#f59e0b;height:100%;width:24%;border-radius:4px;"></div>
+                </div>
+                <div style="font:700 12px 'Caveat',cursive;color:#555;width:44px;text-align:right;">R$47</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font:400 12px 'Caveat',cursive;width:68px;color:#555;flex-shrink:0;">🧴 Higiene</div>
+                <div style="flex:1;background:#eee;border-radius:4px;height:12px;overflow:hidden;cursor:pointer;">
+                  <div style="background:#8b5cf6;height:100%;width:18%;border-radius:4px;"></div>
+                </div>
+                <div style="font:700 12px 'Caveat',cursive;color:#555;width:44px;text-align:right;">R$36</div>
+              </div>
+            </div>
+            <div style="font:400 11px 'Caveat',cursive;color:#bbb;margin-top:5px;text-align:right;">toque na barra → produtos desta categoria</div>
+          </div>
+
+          <!-- Acesso às sub-telas -->
+          <div style="padding:10px 16px 14px;">
+            <div style="font:700 10px 'Space Mono',monospace;color:#999;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Explorar</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <!-- Link para 3b -->
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1.5px solid #eee;border-radius:10px;">
+                <span style="font-size:18px;">📈</span>
+                <div style="flex:1;">
+                  <div style="font:700 13px 'Caveat',cursive;color:#1a1a1a;">Histórico por produto</div>
+                  <div style="font:400 11px 'Caveat',cursive;color:#aaa;">Veja como o preço de cada item variou</div>
+                </div>
+                <div style="font:700 13px 'Caveat',cursive;color:#3b82f6;">→</div>
+              </div>
+              <!-- Link para 3c -->
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1.5px solid #eee;border-radius:10px;">
+                <span style="font-size:18px;">🏪</span>
+                <div style="flex:1;">
+                  <div style="font:700 13px 'Caveat',cursive;color:#1a1a1a;">Comparativo de supermercados</div>
+                  <div style="font:400 11px 'Caveat',cursive;color:#aaa;">Preço médio histórico por mercado</div>
+                </div>
+                <div style="font:700 13px 'Caveat',cursive;color:#3b82f6;">→</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 4b: Diagrama de navegação -->
+    <div class="dv-opt" id="4b">
+      <div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a> Mapa de navegação do app</div>
+      <div class="dv-card" style="width:420px;padding:20px;">
+        <div style="font:700 13px 'Space Mono',monospace;color:#1a1a1a;margin-bottom:16px;">Fluxo de telas</div>
+
+        <!-- Home -->
+        <div style="display:flex;justify-content:center;margin-bottom:8px;">
+          <div style="padding:10px 24px;background:#1a1a1a;border-radius:10px;font:700 15px 'Caveat',cursive;color:#fff;text-align:center;">🏠 Home<br><span style="font:400 11px 'Caveat',cursive;color:#888;">(tela 3a)</span></div>
+        </div>
+
+        <!-- Setas para baixo -->
+        <div style="display:flex;justify-content:space-around;margin-bottom:4px;">
+          <div style="font:400 12px 'Caveat',cursive;color:#aaa;">↓</div>
+          <div style="font:400 12px 'Caveat',cursive;color:#aaa;">↓</div>
+          <div style="font:400 12px 'Caveat',cursive;color:#aaa;">↓</div>
+        </div>
+
+        <!-- 3 modos -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div style="padding:8px;background:#e8f5e9;border:1.5px solid #86efac;border-radius:8px;text-align:center;">
+            <div style="font:700 13px 'Caveat',cursive;color:#166534;">🏠 Despensa</div>
+            <div style="font:400 10px 'Caveat',cursive;color:#888;">tela 2a</div>
+          </div>
+          <div style="padding:8px;background:#fff4e6;border:1.5px solid #fdba74;border-radius:8px;text-align:center;">
+            <div style="font:700 13px 'Caveat',cursive;color:#c2410c;">🛒 Carrinho</div>
+            <div style="font:400 10px 'Caveat',cursive;color:#888;">tela 2b</div>
+          </div>
+          <div style="padding:8px;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;text-align:center;">
+            <div style="font:700 13px 'Caveat',cursive;color:#1e40af;">📊 Analítico</div>
+            <div style="font:400 10px 'Caveat',cursive;color:#888;">tela 4a</div>
+          </div>
+        </div>
+
+        <!-- Setas secundárias -->
+        <div style="display:flex;justify-content:flex-end;padding-right:14px;margin-bottom:4px;">
+          <div style="font:400 12px 'Caveat',cursive;color:#aaa;">↓ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ↓</div>
+        </div>
+
+        <!-- Sub-telas do Carrinho e Analítico -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div></div>
+          <div style="padding:8px;background:#fff7ed;border:1.5px solid #fde047;border-radius:8px;text-align:center;">
+            <div style="font:700 12px 'Caveat',cursive;color:#854d0e;">✅ Finalizar</div>
+            <div style="font:400 10px 'Caveat',cursive;color:#888;">tela 2c</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="padding:6px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;text-align:center;">
+              <div style="font:700 11px 'Caveat',cursive;color:#166534;">📈 Produto</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#888;">tela 3b</div>
+            </div>
+            <div style="padding:6px;background:#fef9c3;border:1.5px solid #fde047;border-radius:8px;text-align:center;">
+              <div style="font:700 11px 'Caveat',cursive;color:#854d0e;">🏪 Mercados</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#888;">tela 3c</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nota sobre produto no carrinho -->
+        <div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;display:flex;gap:6px;align-items:flex-start;">
+          <span style="font-size:12px;flex-shrink:0;">👆</span>
+          <span style="font:400 11px 'Caveat',cursive;color:#1e40af;">Toque num produto no Carrinho → abre tela 3b (histórico de preços daquele produto)</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="dv-next">
+    Próximos passos: "gosto de tudo, vamos construir o app" · "ajusta o mapa de navegação <a class="dv-oid" href="#4b">4b</a>" · "mostra como seria o histórico de compras anteriores"
+  </p>
+</section>
+
+<!-- TURN 3 -->
+<section class="dv-turn" id="t3">
+  <div class="dv-thd">
+    <a class="dv-tid" href="#t3">3</a>
+    <span class="dv-tname">Modo Analítico — preços, tendências e supermercados</span>
+  </div>
+  <div class="dv-opts">
+
+    <!-- 3a: HOME — dashboard de entrada -->
+    <div class="dv-opt" id="3a">
+      <div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a> Home — tela de entrada do app</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+          <!-- Header home -->
+          <div style="background:#1a1a1a;padding:16px 16px 20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+              <div style="font:700 24px 'Caveat',cursive;color:#fff;">🛒 Mercadeiro</div>
+              <div style="width:34px;height:34px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
+            </div>
+            <div style="font:400 13px 'Caveat',cursive;color:#888;">Boa tarde, família Silva 👋</div>
+          </div>
+
+          <!-- Cards de acesso aos modos -->
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:#f5f3ef;">
+
+            <!-- Card Despensa -->
+            <div style="background:#fff;border:2px solid #1a1a1a;border-radius:12px;overflow:hidden;box-shadow:3px 3px 0 #1a1a1a;">
+              <div style="background:#e8f5e9;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div style="font:700 18px 'Caveat',cursive;color:#1a1a1a;">🏠 Despensa</div>
+                  <div style="font:400 12px 'Caveat',cursive;color:#555;">O que precisamos comprar</div>
+                </div>
+                <div style="font:700 28px 'Caveat',cursive;color:#22c55e;">12</div>
+              </div>
+              <div style="padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;gap:6px;">
+                  <div style="background:#dcfce7;border-radius:20px;padding:2px 10px;font:600 11px 'Caveat',cursive;color:#166534;">🍎 5 Frutas</div>
+                  <div style="background:#dbeafe;border-radius:20px;padding:2px 10px;font:600 11px 'Caveat',cursive;color:#1e40af;">🥛 3 Latic.</div>
+                </div>
+                <div style="font:700 13px 'Caveat',cursive;color:#1a1a1a;">Abrir →</div>
+              </div>
+            </div>
+
+            <!-- Card Carrinho -->
+            <div style="background:#fff;border:2px solid #1a1a1a;border-radius:12px;overflow:hidden;box-shadow:3px 3px 0 #1a1a1a;">
+              <div style="background:#f0f4ff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div style="font:700 18px 'Caveat',cursive;color:#1a1a1a;">📊 Analítico</div>
+                  <div style="font:400 12px 'Caveat',cursive;color:#555;">Preços, tendências e gastos</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font:700 18px 'Caveat',cursive;color:#3b82f6;">R$412</div>
+                  <div style="font:400 10px 'Caveat',cursive;color:#aaa;">este mês</div>
+                </div>
+              </div>
+              <div style="padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;gap:6px;">
+                  <div style="background:#fff7ed;border-radius:20px;padding:2px 10px;font:600 11px 'Caveat',cursive;color:#c2410c;">🔥 Frango ↑18%</div>
+                </div>
+                <div style="font:700 13px 'Caveat',cursive;color:#1a1a1a;">Abrir →</div>
+              </div>
+            </div><div style="background:#ff5c3a;border:2px solid #1a1a1a;border-radius:12px;box-shadow:3px 3px 0 #1a1a1a;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+              <div>
+                <div style="font:700 20px 'Caveat',cursive;color:#fff;">🛒 Iniciar Compra</div>
+                <div style="font:400 12px 'Caveat',cursive;color:rgba(255,255,255,.7);">12 itens da despensa prontos</div>
+              </div>
+              <div style="font:700 28px 'Caveat',cursive;color:#fff;">→</div>
+            </div>
+
+            <!-- Card Analítico -->
+            
+
+          </div>
+
+          <!-- Insight rápido -->
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- 3b: Histórico de preço por produto -->
+    <div class="dv-opt" id="3b">
+      <div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a> Histórico de preço — por produto</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+          <div style="background:#f0f4ff;padding:12px 16px;border-bottom:2px solid #1a1a1a;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-size:20px;">←</div>
+              <div class="sk-title" style="font-size:18px;">🍗 Peito de Frango</div>
+            </div>
+            <div style="font:400 12px 'Caveat',cursive;color:#aaa;margin-top:2px;">Histórico de preço · últimos 6 meses</div>
+          </div>
+
+          <!-- Preço atual vs melhor -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#eee;border-bottom:2px solid #1a1a1a;">
+            <div style="background:#fff;padding:10px;text-align:center;">
+              <div style="font:700 18px 'Caveat',cursive;color:#ef4444;">R$28,90</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#aaa;">último preço</div>
+            </div>
+            <div style="background:#f0fdf4;padding:10px;text-align:center;">
+              <div style="font:700 18px 'Caveat',cursive;color:#22c55e;">R$21,50</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#aaa;">menor preço</div>
+            </div>
+            <div style="background:#fff;padding:10px;text-align:center;">
+              <div style="font:700 18px 'Caveat',cursive;color:#f59e0b;">R$24,80</div>
+              <div style="font:400 10px 'Caveat',cursive;color:#aaa;">média</div>
+            </div>
+          </div>
+
+          <!-- Gráfico sparkline simulado -->
+          <div style="padding:12px 16px 4px;">
+            <div style="font:700 11px 'Space Mono',monospace;font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Variação de preço</div>
+            <!-- SVG-like bar chart com divs -->
+            <div style="display:flex;align-items:flex-end;gap:4px;height:64px;border-left:2px solid #eee;border-bottom:2px solid #eee;padding:0 4px;">
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                <div style="flex:1;width:100%;background:#3b82f6;border-radius:3px 3px 0 0;height:44%;"></div>
+                <div style="font:400 9px 'Caveat',cursive;color:#aaa;">Jan</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                <div style="flex:1;width:100%;background:#3b82f6;border-radius:3px 3px 0 0;height:50%;"></div>
+                <div style="font:400 9px 'Caveat',cursive;color:#aaa;">Fev</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                <div style="flex:1;width:100%;background:#22c55e;border-radius:3px 3px 0 0;height:35%;"></div>
+                <div style="font:400 9px 'Caveat',cursive;color:#aaa;">Mar</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                <div style="flex:1;width:100%;background:#3b82f6;border-radius:3px 3px 0 0;height:55%;"></div>
+                <div style="font:400 9px 'Caveat',cursive;color:#aaa;">Abr</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                <div style="flex:1;width:100%;background:#f59e0b;border-radius:3px 3px 0 0;height:72%;"></div>
+                <div style="font:400 9px 'Caveat',cursive;color:#aaa;">Mai</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;">
+                <div style="flex:1;width:100%;background:#ef4444;border-radius:3px 3px 0 0;height:90%;"></div>
+                <div style="font:400 9px 'Caveat',cursive;color:#aaa;">Jun</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:2px;">
+              <span style="font:400 9px 'Caveat',cursive;color:#ccc;">R$21</span>
+              <span style="font:400 9px 'Caveat',cursive;color:#ccc;">R$29</span>
+            </div>
+          </div>
+
+          <!-- Por supermercado -->
+          <div style="padding:4px 16px 8px;">
+            <div style="font:700 11px 'Space Mono',monospace;font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Preço por supermercado</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f0fdf4;border-radius:8px;border:1.5px solid #86efac;">
+                <span style="font-size:14px;">🏆</span>
+                <span style="font:700 13px 'Caveat',cursive;flex:1;color:#166534;">Mercadão</span>
+                <span style="font:700 16px 'Caveat',cursive;color:#22c55e;">R$21,50</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border-radius:8px;border:1.5px solid #eee;">
+                <span style="font-size:14px;">  </span>
+                <span style="font:400 13px 'Caveat',cursive;flex:1;color:#555;">Extra</span>
+                <span style="font:700 16px 'Caveat',cursive;color:#555;">R$25,90</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff7ed;border-radius:8px;border:1.5px solid #fed7aa;">
+                <span style="font-size:14px;">  </span>
+                <span style="font:400 13px 'Caveat',cursive;flex:1;color:#555;">Carrefour</span>
+                <span style="font:700 16px 'Caveat',cursive;color:#f59e0b;">R$28,90</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alerta de preço -->
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- 3c: Comparativo por supermercado -->
+    <div class="dv-opt" id="3c">
+      <div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a> Comparativo de supermercados</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+          <div style="background:#f0f4ff;padding:12px 16px;border-bottom:2px solid #1a1a1a;">
+            <div class="sk-title" style="margin-bottom:4px;">🏪 Por Supermercado</div>
+            <div style="font:400 12px 'Caveat',cursive;color:#aaa;">Preço médio histórico por produto</div>
+          </div>
+
+          <!-- Aviso dados históricos -->
+          <div style="margin:10px 16px 0;padding:8px 12px;background:#fef9c3;border:1.5px solid #fde047;border-radius:8px;display:flex;gap:8px;align-items:center;">
+            <span style="font-size:14px;">📅</span>
+            <span style="font:400 12px 'Caveat',cursive;color:#713f12;">Baseado no histórico de compras registradas. Preços podem variar.</span>
+          </div>
+
+          <!-- Resumo rápido por mercado -->
+          <div style="display:flex;gap:8px;padding:10px 16px;overflow-x:auto;border-bottom:1.5px solid #eee;">
+            <div style="flex-shrink:0;padding:8px 12px;background:#e0f2fe;border:1.5px solid #7dd3fc;border-radius:10px;text-align:center;min-width:80px;">
+              <div style="font:700 16px 'Caveat',cursive;color:#0369a1;">Mercadão</div>
+              <div style="font:400 11px 'Caveat',cursive;color:#0369a1;">média menor em 5 itens</div>
+            </div>
+            <div style="flex-shrink:0;padding:8px 12px;background:#dcfce7;border:1.5px solid #86efac;border-radius:10px;text-align:center;min-width:80px;">
+              <div style="font:700 16px 'Caveat',cursive;color:#166534;">Extra</div>
+              <div style="font:400 11px 'Caveat',cursive;color:#166534;">média menor em 3 itens</div>
+            </div>
+            <div style="flex-shrink:0;padding:8px 12px;background:#fef9c3;border:1.5px solid #fde047;border-radius:10px;text-align:center;min-width:80px;">
+              <div style="font:700 16px 'Caveat',cursive;color:#854d0e;">Carrefour</div>
+              <div style="font:400 11px 'Caveat',cursive;color:#854d0e;">média menor em 2 itens</div>
+            </div>
+          </div>
+
+          <!-- Tabela comparativa -->
+          <div style="overflow-x:auto;">
+            <!-- Header -->
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;background:#f5f3ef;border-bottom:2px solid #1a1a1a;">
+              <div style="padding:8px 10px;font:700 10px 'Space Mono',monospace;color:#999;">PRODUTO</div>
+              <div style="padding:8px 6px;font:700 10px 'Space Mono',monospace;color:#0369a1;text-align:center;">Mercadão</div>
+              <div style="padding:8px 6px;font:700 10px 'Space Mono',monospace;color:#166534;text-align:center;">Extra</div>
+              <div style="padding:8px 6px;font:700 10px 'Space Mono',monospace;color:#854d0e;text-align:center;">Carrefour</div>
+            </div>
+            <!-- Rows -->
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1.5px solid #eee;">
+              <div style="padding:9px 10px;font:400 13px 'Caveat',cursive;color:#333;">🍗 Frango</div>
+              <div style="padding:9px 6px;text-align:center;background:#f0fdf4;"><span style="font:700 13px 'Caveat',cursive;color:#22c55e;">R$21,50</span><div style="font-size:9px;color:#22c55e;">🏆</div></div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$25,90</span></div>
+              <div style="padding:9px 6px;text-align:center;background:#fff7ed;"><span style="font:400 13px 'Caveat',cursive;color:#f59e0b;">R$28,90</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1.5px solid #eee;">
+              <div style="padding:9px 10px;font:400 13px 'Caveat',cursive;color:#333;">🍎 Maçã</div>
+              <div style="padding:9px 6px;text-align:center;background:#f0fdf4;"><span style="font:700 13px 'Caveat',cursive;color:#22c55e;">R$3,20</span><div style="font-size:9px;color:#22c55e;">🏆</div></div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$3,90</span></div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$4,20</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1.5px solid #eee;">
+              <div style="padding:9px 10px;font:400 13px 'Caveat',cursive;color:#333;">🥛 Leite</div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$5,50</span></div>
+              <div style="padding:9px 6px;text-align:center;background:#f0fdf4;"><span style="font:700 13px 'Caveat',cursive;color:#22c55e;">R$4,80</span><div style="font-size:9px;color:#22c55e;">🏆</div></div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$5,10</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1.5px solid #eee;">
+              <div style="padding:9px 10px;font:400 13px 'Caveat',cursive;color:#333;">🧀 Queijo</div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$16,90</span></div>
+              <div style="padding:9px 6px;text-align:center;background:#f0fdf4;"><span style="font:700 13px 'Caveat',cursive;color:#22c55e;">R$14,00</span><div style="font-size:9px;color:#22c55e;">🏆</div></div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$15,50</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr 1fr;border-bottom:1.5px solid #eee;">
+              <div style="padding:9px 10px;font:400 13px 'Caveat',cursive;color:#333;">🥚 Ovos</div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$12,90</span></div>
+              <div style="padding:9px 6px;text-align:center;"><span style="font:400 13px 'Caveat',cursive;color:#888;">R$13,50</span></div>
+              <div style="padding:9px 6px;text-align:center;background:#f0fdf4;"><span style="font:700 13px 'Caveat',cursive;color:#22c55e;">R$11,90</span><div style="font-size:9px;color:#22c55e;">🏆</div></div>
+            </div>
+          </div>
+
+          <!-- Nota histórica -->
+          
+        </div>
+      </div>
+    </div>
+
+  </div>
+  
+</section>
+
+<!-- TURN 2 -->
+<section class="dv-turn" id="t2">
+  <div class="dv-thd">
+    <a class="dv-tid" href="#t2">2</a>
+    <span class="dv-tname">Dois modos: Despensa → Carrinho → Finalizar</span>
+  </div>
+  <div class="dv-opts">
+
+    <!-- 2a: Tela Despensa -->
+    <div class="dv-opt" id="2a">
+      <div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a> Modo Despensa — "o que falta?"</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+          <!-- Header modo -->
+          <div style="background:#e8f5e9;padding:14px 16px 10px;border-bottom:2px solid #1a1a1a;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div class="sk-title">🏠 Despensa</div>
+              <div style="display:flex;gap:6px;">
+                <div style="background:#fff;border:2px solid #1a1a1a;border-radius:8px;padding:5px 12px;font:700 13px 'Caveat',cursive;box-shadow:2px 2px 0 #1a1a1a;">Despensa</div>
+                <div style="background:#1a1a1a;border:2px solid #1a1a1a;border-radius:8px;padding:5px 12px;font:700 13px 'Caveat',cursive;color:#fff;">Carrinho 🛒</div>
+              </div>
+            </div>
+            <div style="font:400 13px 'Caveat',cursive;color:#555;">O que precisamos comprar? Vai sendo adicionado ao carrinho.</div>
+          </div>
+          <!-- Input rápido -->
+          <div style="padding:10px 16px;display:flex;gap:8px;border-bottom:1.5px solid #eee;">
+            <div class="sk-input" style="flex:1;">+ o que está faltando?</div>
+            <div style="background:#22c55e;border:2px solid #1a1a1a;border-radius:8px;padding:6px 14px;font:700 14px 'Caveat',cursive;color:#fff;box-shadow:2px 2px 0 #1a1a1a;">Add</div>
+          </div>
+          <!-- Itens agrupados por categoria -->
+          <div class="sk-cat-head" style="display:flex;align-items:center;gap:8px;">🍎 Frutas</div>
+          <div class="sk-row">
+            <div style="font-size:18px;">🍌</div>
+            <span class="sk-label" style="flex:1;">Banana</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="font:400 11px 'Caveat',cursive;color:#aaa;">qtd:</div>
+              <div class="sk-qty"><span>−</span>2<span>+</span></div>
+            </div>
+            <div style="width:28px;height:28px;border-radius:50%;border:1.5px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:14px;margin-left:6px;cursor:pointer;">✕</div>
+          </div>
+          <div class="sk-row">
+            <div style="font-size:18px;">🍊</div>
+            <span class="sk-label" style="flex:1;">Laranja</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="font:400 11px 'Caveat',cursive;color:#aaa;">qtd:</div>
+              <div class="sk-qty"><span>−</span>6<span>+</span></div>
+            </div>
+            <div style="width:28px;height:28px;border-radius:50%;border:1.5px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:14px;margin-left:6px;cursor:pointer;">✕</div>
+          </div>
+          <div class="sk-cat-head" style="display:flex;align-items:center;gap:8px;">🥛 Laticínios</div>
+          <div class="sk-row">
+            <div style="font-size:18px;">🥛</div>
+            <span class="sk-label" style="flex:1;">Leite integral</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="font:400 11px 'Caveat',cursive;color:#aaa;">qtd:</div>
+              <div class="sk-qty"><span>−</span>2<span>+</span></div>
+            </div>
+            <div style="width:28px;height:28px;border-radius:50%;border:1.5px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:14px;margin-left:6px;cursor:pointer;">✕</div>
+          </div>
+          <div class="sk-row">
+            <div style="font-size:18px;">🧀</div>
+            <span class="sk-label" style="flex:1;">Queijo mussarela</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="font:400 11px 'Caveat',cursive;color:#aaa;">qtd:</div>
+              <div class="sk-qty"><span>−</span>1<span>+</span></div>
+            </div>
+            <div style="width:28px;height:28px;border-radius:50%;border:1.5px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:14px;margin-left:6px;cursor:pointer;">✕</div>
+          </div>
+          <div class="sk-cat-head" style="display:flex;align-items:center;gap:8px;">🥩 Carnes</div>
+          <div class="sk-row">
+            <div style="font-size:18px;">🍗</div>
+            <span class="sk-label" style="flex:1;">Peito de frango</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="font:400 11px 'Caveat',cursive;color:#aaa;">qtd:</div>
+              <div class="sk-qty"><span>−</span>1<span>+</span></div>
+            </div>
+            <div style="width:28px;height:28px;border-radius:50%;border:1.5px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:14px;margin-left:6px;cursor:pointer;">✕</div>
+          </div>
+          <!-- CTA ir para carrinho -->
+          <div style="margin:12px 16px;padding:12px 14px;background:#1a1a1a;border-radius:10px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font:400 11px 'Caveat',cursive;color:#aaa;">5 itens prontos para comprar</div>
+              <div style="font:700 16px 'Caveat',cursive;color:#fff;">Ir para o Carrinho →</div>
+            </div>
+            <div style="font-size:28px;">🛒</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2b: Tela Carrinho completo -->
+    <div class="dv-opt" id="2b">
+      <div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a> Modo Carrinho — compra em tempo real</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+          <div style="background:#fff4e6;padding:12px 16px;border-bottom:2px solid #1a1a1a;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div class="sk-title">🛒 Carrinho</div>
+              <div style="display:flex;gap:6px;">
+                <div style="background:#fff;border:2px solid #1a1a1a;border-radius:8px;padding:5px 12px;font:700 13px 'Caveat',cursive;box-shadow:2px 2px 0 #1a1a1a;">🏠 Despensa</div>
+                <div style="background:#1a1a1a;border:2px solid #1a1a1a;border-radius:8px;padding:5px 12px;font:700 13px 'Caveat',cursive;color:#fff;">Carrinho</div>
+              </div>
+            </div>
+            <!-- Geoloc badge -->
+            <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #f59e0b;border-radius:8px;padding:5px 10px;width:fit-content;">
+              <span style="font-size:14px;">📍</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#555;">Supermercado Extra — Rua das Flores</span>
+              <span style="font:400 11px 'Caveat',cursive;color:#aaa;">▼</span>
+            </div>
+          </div>
+          <!-- Add ad-hoc -->
+          <div style="padding:8px 16px;display:flex;gap:8px;border-bottom:1.5px solid #eee;">
+            <div class="sk-input" style="flex:1;">+ adicionar item extra...</div>
+            <div class="sk-scan-btn" style="background:#f59e0b;border-color:#d97706;color:#fff;box-shadow:none;padding:6px 10px;">📷</div>
+          </div>
+          <!-- Progress -->
+          <div style="padding:6px 16px 0;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+              <span style="font:400 11px 'Caveat',cursive;color:#999;">2 de 5 comprados</span>
+              <span style="font:600 11px 'Caveat',cursive;color:#ff5c3a;">40%</span>
+            </div>
+            <div class="sk-progress" style="margin:0;"><div class="sk-progress-fill" style="width:40%;background:#ff5c3a;"></div></div>
+          </div>
+          <!-- Legenda navegação + origem -->
+          <div style="background:#eff6ff;border-bottom:1.5px solid #bfdbfe;padding:5px 16px;display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span style="font-size:11px;">👆</span>
+              <span style="font:400 11px 'Caveat',cursive;color:#1e40af;">Toque no produto → histórico</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <div style="display:flex;align-items:center;gap:2px;background:#e8f5e9;border-radius:10px;padding:2px 7px;"><span style="font-size:9px;">🏠</span><span style="font:600 10px 'Caveat',cursive;color:#2e7d32;">planejado</span></div>
+              <div style="display:flex;align-items:center;gap:2px;background:#fff3e0;border-radius:10px;padding:2px 7px;"><span style="font-size:9px;">⚡</span><span style="font:600 10px 'Caveat',cursive;color:#e65100;">extra</span></div>
+            </div>
+          </div>
+          <!-- Items -->
+          <div class="sk-cat-head">🍎 Frutas</div>
+          <!-- Banana — veio da despensa, comprado -->
+          <div style="background:#f0fdf4;border-bottom:1.5px solid #eee;">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 16px 6px;">
+              <div class="sk-check sk-done" style="width:22px;height:22px;">✓</div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <div style="background:#e8f5e9;border-radius:10px;padding:1px 6px;font-size:9px;flex-shrink:0;">🏠</div>
+                  <div class="sk-label sk-checked">Banana</div>
+                  <span style="font:400 11px 'Caveat',cursive;color:#3b82f6;">📈 ›</span>
+                </div>
+                <div style="font:400 11px 'Caveat',cursive;color:#bbb;">cod: 7891000253</div>
+              </div>
+              <div class="sk-qty"><span>−</span>2<span>+</span></div>
+              <div style="text-align:right;">
+                <div style="font:600 14px 'Caveat',cursive;color:#22c55e;">R$5,90</div>
+              </div>
+            </div>
+          </div>
+          <!-- Laranja — item extra (não planejado) -->
+          <div style="border-bottom:1.5px solid #eee;">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 16px 6px;">
+              <div class="sk-check sk-todo" style="width:22px;height:22px;"></div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <div style="background:#fff3e0;border-radius:10px;padding:1px 6px;font-size:9px;flex-shrink:0;">⚡</div>
+                  <div class="sk-label">Laranja</div>
+                  <span style="font:400 11px 'Caveat',cursive;color:#3b82f6;">📈 ›</span>
+                </div>
+                <div style="font:400 11px 'Caveat',cursive;color:#ccc;">sem código escaneado</div>
+              </div>
+              <div class="sk-qty"><span>−</span>6<span>+</span></div>
+              <div style="text-align:right;">
+                <div style="font:400 12px 'Caveat',cursive;color:#ccc;">R$—</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;padding:0 16px 10px;align-items:center;">
+              <div style="display:flex;align-items:center;gap:4px;border:1.5px solid #f59e0b;border-radius:8px;padding:4px 10px;font:600 12px 'Caveat',cursive;color:#d97706;flex:1;justify-content:center;">📷 Escanear código</div>
+              <div style="border:1.5px solid #ddd;border-radius:8px;padding:4px 10px;font:400 12px 'Caveat',cursive;color:#aaa;flex:1;text-align:center;">💲 digitar preço</div>
+            </div>
+          </div>
+          <div class="sk-cat-head">🥛 Laticínios</div>
+          <!-- Leite — despensa, comprado -->
+          <div style="border-bottom:1.5px solid #eee;">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 16px 6px;">
+              <div class="sk-check sk-done" style="width:22px;height:22px;">✓</div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <div style="background:#e8f5e9;border-radius:10px;padding:1px 6px;font-size:9px;flex-shrink:0;">🏠</div>
+                  <div class="sk-label sk-checked">Leite integral</div>
+                  <span style="font:400 11px 'Caveat',cursive;color:#3b82f6;">📈 ›</span>
+                </div>
+                <div style="font:400 11px 'Caveat',cursive;color:#bbb;">cod: 7894900015</div>
+              </div>
+              <div class="sk-qty"><span>−</span>2<span>+</span></div>
+              <div style="font:600 14px 'Caveat',cursive;color:#22c55e;">R$7,50</div>
+            </div>
+          </div>
+          <!-- Queijo — despensa, não comprado -->
+          <div style="border-bottom:1.5px solid #eee;">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 16px 6px;">
+              <div class="sk-check sk-todo" style="width:22px;height:22px;"></div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <div style="background:#e8f5e9;border-radius:10px;padding:1px 6px;font-size:9px;flex-shrink:0;">🏠</div>
+                  <div class="sk-label">Queijo mussarela</div>
+                  <span style="font:400 11px 'Caveat',cursive;color:#3b82f6;">📈 ›</span>
+                </div>
+                <div style="font:400 11px 'Caveat',cursive;color:#ccc;">sem código</div>
+              </div>
+              <div class="sk-qty"><span>−</span>1<span>+</span></div>
+              <div style="font:400 12px 'Caveat',cursive;color:#ccc;">R$—</div>
+            </div>
+            <div style="display:flex;gap:6px;padding:0 16px 10px;">
+              <div style="display:flex;align-items:center;gap:4px;border:1.5px solid #f59e0b;border-radius:8px;padding:4px 10px;font:600 12px 'Caveat',cursive;color:#d97706;flex:1;justify-content:center;">📷 Escanear código</div>
+              <div style="border:1.5px solid #ddd;border-radius:8px;padding:4px 10px;font:400 12px 'Caveat',cursive;color:#aaa;flex:1;text-align:center;">💲 digitar preço</div>
+            </div>
+          </div>
+          <!-- Total + finalizar -->
+          <div style="position:sticky;bottom:0;background:#fff;">
+            <div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-top:2px solid #eee;">
+              <div>
+                <div style="font:400 11px 'Caveat',cursive;color:#aaa;">total parcial</div>
+                <div style="font:700 20px 'Caveat',cursive;color:#1a1a1a;">R$ 13,40</div>
+              </div>
+              <div style="background:#ff5c3a;color:#fff;border:2px solid #1a1a1a;border-radius:10px;padding:10px 18px;font:700 16px 'Caveat',cursive;box-shadow:3px 3px 0 #1a1a1a;">
+                ✅ Finalizar Compra
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2c: Fluxo Finalizar Compra -->
+    <div class="dv-opt" id="2c">
+      <div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a> Finalizar compra — resultado + o que ficou</div>
+      <div class="dv-card">
+        <div class="phone">
+          <div class="sk-status-bar"><span>9:41</span><span>● ● ●</span></div>
+          <!-- Confirmação modal / tela -->
+          <div style="background:#f0fdf4;padding:24px 20px 16px;text-align:center;border-bottom:2px solid #1a1a1a;">
+            <div style="font-size:48px;margin-bottom:8px;">🎉</div>
+            <div style="font:700 26px 'Caveat',cursive;color:#1a1a1a;">Compra Finalizada!</div>
+            <div style="font:400 14px 'Caveat',cursive;color:#555;margin-top:4px;">Sábado, 28 jun · 11h32</div>
+            <!-- Geoloc -->
+            <div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:#fff;border:1.5px solid #22c55e;border-radius:20px;padding:4px 14px;">
+              <span>📍</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#555;">Supermercado Extra, R. das Flores</span>
+            </div>
+          </div>
+          <!-- Resumo financeiro -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#eee;border-bottom:2px solid #1a1a1a;">
+            <div style="background:#fff;padding:12px;text-align:center;">
+              <div style="font:700 24px 'Caveat',cursive;color:#22c55e;">R$13,40</div>
+              <div style="font:400 12px 'Caveat',cursive;color:#aaa;">total gasto</div>
+            </div>
+            <div style="background:#fff;padding:12px;text-align:center;">
+              <div style="font:700 24px 'Caveat',cursive;color:#1a1a1a;">2/5</div>
+              <div style="font:400 12px 'Caveat',cursive;color:#aaa;">itens comprados</div>
+            </div>
+          </div>
+          <!-- Comprados → saem da despensa -->
+          <div style="padding:10px 16px 4px;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
+              <div style="font:700 12px 'Space Mono',monospace;color:#22c55e;text-transform:uppercase;font-size:10px;letter-spacing:.04em;">✅ Comprados — saem da despensa</div>
+              <div style="font:700 14px 'Caveat',cursive;color:#22c55e;">R$13,40</div>
+            </div>
+            <div class="sk-row" style="padding:6px 0;border-bottom:none;">
+              <div class="sk-check sk-done" style="width:18px;height:18px;font-size:10px;">✓</div>
+              <span class="sk-label sk-checked" style="flex:1;font-size:13px;">Banana (×2)</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#bbb;">R$5,90</span>
+            </div>
+            <div class="sk-row" style="padding:6px 0;border-bottom:none;">
+              <div class="sk-check sk-done" style="width:18px;height:18px;font-size:10px;">✓</div>
+              <span class="sk-label sk-checked" style="flex:1;font-size:13px;">Leite integral (×2)</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#bbb;">R$7,50</span>
+            </div>
+          </div>
+          <!-- Itens não planejados → comprados no ato -->
+          <div style="padding:6px 16px;border-top:1.5px dashed #eee;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
+              <div style="font:700 12px 'Space Mono',monospace;color:#e65100;text-transform:uppercase;font-size:10px;letter-spacing:.04em;">⚡ Não planejados — comprados na hora</div>
+              <div style="font:700 14px 'Caveat',cursive;color:#e65100;">R$8,40</div>
+            </div>
+            <div class="sk-row" style="padding:6px 0;border-bottom:none;">
+              <div class="sk-check sk-done" style="width:18px;height:18px;font-size:10px;">✓</div>
+              <span class="sk-label sk-checked" style="flex:1;font-size:13px;">Laranja (×6)</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#bbb;">R$8,40</span>
+            </div>
+            <div style="font:400 11px 'Caveat',cursive;color:#bbb;padding:0 0 6px 28px;font-style:italic;">item extra — adicionado ao histórico</div>
+          </div>
+          <!-- Não comprados → ficam na lista -->
+          <div style="padding:6px 16px;border-top:1.5px dashed #eee;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
+              <div style="font:700 12px 'Space Mono',monospace;color:#f59e0b;text-transform:uppercase;font-size:10px;letter-spacing:.04em;">⏳ Não comprados — ficam na lista</div>
+              <div style="font:700 14px 'Caveat',cursive;color:#bbb;">—</div>
+            </div>
+            <div class="sk-row" style="padding:6px 0;border-bottom:none;">
+              <div style="font-size:14px;">🟡</div>
+              <span class="sk-label" style="flex:1;font-size:13px;color:#888;">Queijo mussarela (×1)</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#ccc;">sem preço</span>
+            </div>
+            <div class="sk-row" style="padding:6px 0;border-bottom:none;">
+              <div style="font-size:14px;">🟡</div>
+              <span class="sk-label" style="flex:1;font-size:13px;color:#888;">Peito de frango (×1)</span>
+              <span style="font:400 12px 'Caveat',cursive;color:#ccc;">sem preço</span>
+            </div>
+          </div>
+          <!-- CTAs -->
+          <div style="display:flex;gap:10px;padding:12px 16px;border-top:2px solid #1a1a1a;">
+            <div style="flex:1;text-align:center;border:2px solid #1a1a1a;border-radius:10px;padding:10px;font:700 14px 'Caveat',cursive;box-shadow:2px 2px 0 #1a1a1a;">Ver Despensa 🏠</div>
+            <div style="flex:1;text-align:center;background:#ff5c3a;border:2px solid #1a1a1a;border-radius:10px;padding:10px;font:700 14px 'Caveat',cursive;color:#fff;box-shadow:2px 2px 0 #1a1a1a;">Nova Compra ➜</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  
+</section>
+
+<!-- TURN 1 -->
+
+
+</x-dc>
+</body>
+</html>
